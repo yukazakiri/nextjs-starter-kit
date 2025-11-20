@@ -5,9 +5,9 @@ import clsx from "clsx";
 import {
   BookOpen,
   Calendar,
+  ClipboardCheck,
   ClipboardList,
   CreditCard,
-  FileText,
   GraduationCap,
   HelpCircle,
   HomeIcon,
@@ -51,6 +51,11 @@ const navSections: NavSection[] = [
         icon: GraduationCap,
       },
       {
+        label: "Education History",
+        href: "/dashboard/education-history",
+        icon: ClipboardCheck,
+      },
+      {
         label: "Attendance",
         href: "/dashboard/attendance",
         icon: ClipboardList,
@@ -64,12 +69,7 @@ const navSections: NavSection[] = [
         label: "Schedule",
         href: "/dashboard/schedule",
         icon: Calendar,
-      },
-      {
-        label: "Timetable",
-        href: "/dashboard/timetable",
-        icon: FileText,
-      },
+      }
     ],
   },
   {
