@@ -34,9 +34,9 @@ export default function Integrations() {
             </IntegrationCard>
 
             <IntegrationCard
-              title="Better Auth"
-              description="Modern authentication library with session management, OAuth providers, and security features."
-              link="https://better-auth.com"
+              title="Clerk"
+              description="Complete user management and authentication solution with built-in UI components and session handling."
+              link="https://clerk.com"
             >
               <BetterAuth />
             </IntegrationCard>
