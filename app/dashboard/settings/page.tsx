@@ -1,23 +1,20 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const UserProfile = dynamic(
-  () => import("@clerk/nextjs").then((mod) => mod.UserProfile),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex justify-center p-6">
-        <div className="w-full max-w-2xl h-96 bg-gray-100 animate-pulse rounded-lg" />
-      </div>
-    ),
-  }
-);
+import { UserProfile } from "@clerk/nextjs";
+import { StudentInfoForm } from "@/components/student-info-form";
 
 export default function SettingsPage() {
   return (
     <div className="flex justify-center p-6">
-      <UserProfile routing="hash" />
+      <UserProfile routing="hash">
+        <UserProfile.Page
+          label="Student Information"
+          labelIcon={<span>🎓</span>}
+          url="student-info"
+        >
+          <StudentInfoForm />
+        </UserProfile.Page>
+      </UserProfile>
     </div>
   );
 }

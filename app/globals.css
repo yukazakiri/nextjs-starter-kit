@@ -145,3 +145,28 @@
     @apply bg-background text-foreground;
     }
 }
+
+/* Phone Input Styling */
+.PhoneInput {
+  @apply w-full;
+}
+
+.PhoneInputInput {
+  @apply flex-1 bg-transparent outline-none border-none focus:ring-0 focus:outline-none px-3 py-2 text-sm;
+}
+
+.PhoneInputCountry {
+  @apply mr-2 flex items-center;
+}
+
+.PhoneInputCountryIcon {
+  @apply w-6 h-4;
+}
+
+.PhoneInputCountrySelect {
+  @apply bg-transparent border-0 focus:ring-0 cursor-pointer outline-none;
+}
+
+.PhoneInputCountrySelectArrow {
+  @apply ml-1 opacity-50;
+}
