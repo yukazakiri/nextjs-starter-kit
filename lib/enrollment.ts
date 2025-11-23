@@ -43,7 +43,7 @@ export function formatSchoolYear(
 
   if (!startYear || !endYear) return "";
 
-  return `${startYear}-${endYear}`;
+  return `${startYear} - ${endYear}`;
 }
 
 export async function getStudentEnrollmentStatus(
