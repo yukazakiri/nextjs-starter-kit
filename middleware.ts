@@ -7,6 +7,27 @@ import { NextResponse } from "next/server";
 
 const isStudentDashboard = createRouteMatcher(["/dashboard/student(.*)"]);
 const isFacultyDashboard = createRouteMatcher(["/dashboard/faculty(.*)"]);
+const isStudentOnlyRoute = createRouteMatcher([
+  "/dashboard/subjects",
+  "/dashboard/grades",
+  "/dashboard/attendance",
+  "/dashboard/teachers",
+  "/dashboard/schedule",
+  "/dashboard/assignments",
+  "/dashboard/payments",
+  "/dashboard/library",
+  "/dashboard/announcements",
+  "/dashboard/education-history",
+]);
+const isFacultyOnlyRoute = createRouteMatcher([
+  "/dashboard/faculty/classes",
+  "/dashboard/faculty/students",
+  "/dashboard/faculty/grades",
+  "/dashboard/faculty/attendance",
+  "/dashboard/faculty/schedule",
+  "/dashboard/faculty/assignments",
+  "/dashboard/faculty/announcements",
+]);
 const isOnboardingRoute = createRouteMatcher(["/onboarding"]);
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -35,18 +56,32 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   // Protect dashboard routes - require authentication and role-based access
-  if (isStudentDashboard(req) || isFacultyDashboard(req)) {
+  if (
+    isStudentDashboard(req) ||
+    isFacultyDashboard(req) ||
+    isStudentOnlyRoute(req) ||
+    isFacultyOnlyRoute(req)
+  ) {
     await auth.protect();
-
-    // Get the current user to check publicMetadata
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId!);
-    const userRole = user?.publicMetadata?.role as string | undefined;
 
     console.log("[MIDDLEWARE] Dashboard access attempt");
     console.log("[MIDDLEWARE] User ID:", userId);
-    console.log("[MIDDLEWARE] User role:", userRole);
     console.log("[MIDDLEWARE] Requested path:", req.nextUrl.pathname);
+
+    // Get the current user to check publicMetadata
+    let user;
+    try {
+      const client = await clerkClient();
+      user = await client.users.getUser(userId!);
+    } catch (error) {
+      console.error("[MIDDLEWARE] Error fetching user from Clerk:", error);
+      // If user not found, allow the request to continue
+      // Clerk will handle the authentication redirect
+      return NextResponse.next();
+    }
+
+    const userRole = user?.publicMetadata?.role as string | undefined;
+    console.log("[MIDDLEWARE] User role:", userRole);
 
     // If no role assigned, redirect to onboarding
     if (!userRole) {
@@ -71,10 +106,10 @@ export default clerkMiddleware(async (auth, req) => {
         return NextResponse.redirect(onboardingUrl);
       }
 
-      // If student trying to access faculty dashboard, redirect to student dashboard
-      if (isFacultyDashboard(req)) {
+      // If student trying to access faculty dashboard or faculty-only routes, redirect to student dashboard
+      if (isFacultyDashboard(req) || isFacultyOnlyRoute(req)) {
         console.log(
-          "[MIDDLEWARE] Student trying to access faculty dashboard, redirecting",
+          "[MIDDLEWARE] Student trying to access faculty route, redirecting",
         );
         const studentDashboardUrl = new URL("/dashboard/student", req.url);
         return NextResponse.redirect(studentDashboardUrl);
@@ -92,10 +127,10 @@ export default clerkMiddleware(async (auth, req) => {
         return NextResponse.redirect(onboardingUrl);
       }
 
-      // If faculty trying to access student dashboard, redirect to faculty dashboard
-      if (isStudentDashboard(req)) {
+      // If faculty trying to access student dashboard or student-only routes, redirect to faculty dashboard
+      if (isStudentDashboard(req) || isStudentOnlyRoute(req)) {
         console.log(
-          "[MIDDLEWARE] Faculty trying to access student dashboard, redirecting",
+          "[MIDDLEWARE] Faculty trying to access student route, redirecting",
         );
         const facultyDashboardUrl = new URL("/dashboard/faculty", req.url);
         return NextResponse.redirect(facultyDashboardUrl);

@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 
 import { Calendars } from "@/components/calendars";
 import { DatePicker } from "@/components/date-picker";
@@ -59,11 +59,12 @@ const data = {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const router = useRouter();
-  const { has, sessionClaims } = useAuth();
+  const { has } = useAuth();
+  const { user } = useUser();
 
-  // Get user role from session claims
-  const userRole = (sessionClaims?.metadata as { role?: string })?.role;
-  console.log(userRole);
+  // Get user role from publicMetadata
+  const userRole = user?.publicMetadata?.role as string | undefined;
+  console.log("[SIDEBAR] User role:", userRole);
   // Check if user has calendar access permission
   const hasCalendarAccess = has?.({
     permission: "school_calendar:calendar_access",

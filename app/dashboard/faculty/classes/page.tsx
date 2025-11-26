@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -13,396 +14,258 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   BookOpen,
-  Calendar,
-  Clock,
-  MapPin,
+  MoreVertical,
   Search,
   Users,
-  FileText,
-  TrendingUp,
+  Plus,
+  Calendar,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useAuth } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
+import { getClassColor } from "./_utils/colors";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-const classes = [
-  {
-    id: 1,
-    code: "CS 401",
-    name: "Advanced Web Development",
-    section: "A",
-    credits: 3,
-    semester: "1st Semester",
-    year: "2024-2025",
-    schedule: [
-      {
-        day: "Monday",
-        time: "9:00 AM - 10:30 AM",
-        room: "Room 301, Building A",
-        type: "Lecture",
-      },
-      {
-        day: "Wednesday",
-        time: "9:00 AM - 10:30 AM",
-        room: "Room 301, Building A",
-        type: "Lecture",
-      },
-      {
-        day: "Friday",
-        time: "2:00 PM - 4:00 PM",
-        room: "Lab 205, Building B",
-        type: "Lab",
-      },
-    ],
-    enrolledStudents: 45,
-    capacity: 50,
-    color: "bg-blue-500",
-    courseType: "Lecture & Lab",
-    averageGrade: "B+",
-    attendanceRate: "92%",
-    pendingAssignments: 3,
-  },
-  {
-    id: 2,
-    code: "CS 305",
-    name: "Database Systems",
-    section: "B",
-    credits: 4,
-    semester: "1st Semester",
-    year: "2024-2025",
-    schedule: [
-      {
-        day: "Tuesday",
-        time: "11:00 AM - 12:30 PM",
-        room: "Room 402, Building A",
-        type: "Lecture",
-      },
-      {
-        day: "Thursday",
-        time: "11:00 AM - 12:30 PM",
-        room: "Room 402, Building A",
-        type: "Lecture",
-      },
-      {
-        day: "Thursday",
-        time: "2:00 PM - 4:00 PM",
-        room: "Lab 301, Building B",
-        type: "Lab",
-      },
-    ],
-    enrolledStudents: 38,
-    capacity: 45,
-    color: "bg-green-500",
-    courseType: "Lecture & Lab",
-    averageGrade: "A-",
-    attendanceRate: "88%",
-    pendingAssignments: 5,
-  },
-  {
-    id: 3,
-    code: "CS 201",
-    name: "Data Structures",
-    section: "A",
-    credits: 4,
-    semester: "1st Semester",
-    year: "2024-2025",
-    schedule: [
-      {
-        day: "Monday",
-        time: "2:00 PM - 3:30 PM",
-        room: "Room 501, Building C",
-        type: "Lecture",
-      },
-      {
-        day: "Wednesday",
-        time: "2:00 PM - 3:30 PM",
-        room: "Room 501, Building C",
-        type: "Lecture",
-      },
-    ],
-    enrolledStudents: 52,
-    capacity: 60,
-    color: "bg-purple-500",
-    courseType: "Lecture",
-    averageGrade: "B",
-    attendanceRate: "85%",
-    pendingAssignments: 2,
-  },
-  {
-    id: 4,
-    code: "CS 101",
-    name: "Introduction to Programming",
-    section: "C",
-    credits: 3,
-    semester: "1st Semester",
-    year: "2024-2025",
-    schedule: [
-      {
-        day: "Tuesday",
-        time: "4:00 PM - 5:30 PM",
-        room: "Room 302, Building A",
-        type: "Lecture",
-      },
-      {
-        day: "Friday",
-        time: "10:00 AM - 12:00 PM",
-        room: "Lab 101, Building B",
-        type: "Lab",
-      },
-    ],
-    enrolledStudents: 42,
-    capacity: 50,
-    color: "bg-orange-500",
-    courseType: "Lecture & Lab",
-    averageGrade: "B+",
-    attendanceRate: "90%",
-    pendingAssignments: 1,
-  },
-];
+interface FacultyClass {
+  id: number;
+  subjectCode: string;
+  subjectName: string;
+  section: string;
+  semester: string;
+  schoolYear: string;
+  enrolledStudents: number;
+  maximumSlots: number;
+  credits: number;
+  lecture: number;
+  laboratory: number;
+}
 
 export default function FacultyClassesPage() {
-  const router = useRouter();
-  const { sessionClaims, isLoaded } = useAuth();
+  const { user } = useUser();
+  const [classes, setClasses] = useState<FacultyClass[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [semesterFilter, setSemesterFilter] = useState("all");
-  const [yearFilter, setYearFilter] = useState("2024-2025");
+  const [yearFilter, setYearFilter] = useState("all");
 
-  // Redirect non-faculty users to student dashboard
+  const facultyId = user?.publicMetadata?.facultyId as string | undefined;
+
   useEffect(() => {
-    if (isLoaded) {
-      const userRole = (sessionClaims?.metadata as { role?: string })?.role;
-      if (userRole !== "faculty") {
-        router.push("/dashboard/student");
+    async function fetchClasses() {
+      if (!facultyId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/faculty/classes?facultyId=${facultyId}`,
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setClasses(data.classes || []);
+        }
+      } catch (error) {
+        console.error("Error fetching classes:", error);
+      } finally {
+        setLoading(false);
       }
     }
-  }, [isLoaded, sessionClaims, router]);
+
+    fetchClasses();
+  }, [facultyId]);
 
   const filteredClasses = classes.filter((classItem) => {
     const matchesSearch =
-      classItem.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      classItem.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      classItem.subjectName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      classItem.subjectCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
       classItem.section.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesSemester =
       semesterFilter === "all" || classItem.semester === semesterFilter;
 
-    const matchesYear = yearFilter === "all" || classItem.year === yearFilter;
+    const matchesYear =
+      yearFilter === "all" || classItem.schoolYear === yearFilter;
 
     return matchesSearch && matchesSemester && matchesYear;
   });
 
-  const totalStudents = filteredClasses.reduce(
-    (sum, c) => sum + c.enrolledStudents,
-    0,
-  );
-  const totalPendingAssignments = filteredClasses.reduce(
-    (sum, c) => sum + c.pendingAssignments,
-    0,
-  );
+  const uniqueSchoolYears = Array.from(
+    new Set(classes.map((c) => c.schoolYear)),
+  ).filter(Boolean);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Class Management
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Manage your classes and view student enrollment
-        </p>
+    <div className="p-6 max-w-7xl mx-auto">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Classes</h1>
+          <p className="text-muted-foreground">
+            Manage your classes and view student progress
+          </p>
+        </div>
+        <Button className="rounded-full">
+          <Plus className="h-4 w-4 mr-2" />
+          Create Class
+        </Button>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search classes..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={yearFilter} onValueChange={setYearFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="School Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Years</SelectItem>
-                  <SelectItem value="2024-2025">2024-2025</SelectItem>
-                  <SelectItem value="2023-2024">2023-2024</SelectItem>
-                  <SelectItem value="2022-2023">2022-2023</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={semesterFilter} onValueChange={setSemesterFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Semester" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Semesters</SelectItem>
-                  <SelectItem value="1st Semester">1st Semester</SelectItem>
-                  <SelectItem value="2nd Semester">2nd Semester</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      {/* Filters Section */}
+      <div className="flex flex-col md:flex-row gap-4 mb-8 items-center">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by subject, code, or section..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 rounded-full bg-muted/50 border-transparent focus:bg-background transition-colors"
+          />
+        </div>
+        <div className="flex gap-2 w-full md:w-auto">
+          <Select value={semesterFilter} onValueChange={setSemesterFilter}>
+            <SelectTrigger className="w-full md:w-[160px] rounded-full border-transparent bg-muted/50 hover:bg-muted">
+              <SelectValue placeholder="Semester" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Semesters</SelectItem>
+              <SelectItem value="1st Semester">1st Semester</SelectItem>
+              <SelectItem value="2nd Semester">2nd Semester</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={yearFilter} onValueChange={setYearFilter}>
+            <SelectTrigger className="w-full md:w-[160px] rounded-full border-transparent bg-muted/50 hover:bg-muted">
+              <SelectValue placeholder="School Year" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {uniqueSchoolYears.map((year) => (
+                <SelectItem key={year} value={year}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-            {/* Summary Stats */}
-            <div className="flex items-center gap-6 pt-2 border-t">
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">
-                  <span className="font-semibold">
-                    {filteredClasses.length}
-                  </span>{" "}
-                  Class{filteredClasses.length !== 1 ? "es" : ""}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">
-                  <span className="font-semibold">{totalStudents}</span> Total
-                  Students
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">
-                  <span className="font-semibold">
-                    {totalPendingAssignments}
-                  </span>{" "}
-                  Pending Assignment{totalPendingAssignments !== 1 ? "s" : ""}
-                </span>
-              </div>
-            </div>
+      {/* Classes Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-64 rounded-xl bg-muted/20 animate-pulse" />
+          ))}
+        </div>
+      ) : filteredClasses.length === 0 ? (
+        <div className="text-center py-20">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-6">
+            <BookOpen className="h-10 w-10 text-muted-foreground" />
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Class List */}
-      <div className="space-y-3">
-        {filteredClasses.map((classItem) => (
-          <Card
-            key={classItem.id}
-            className="cursor-pointer hover:shadow-md transition-all hover:border-primary/50"
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start gap-4">
-                {/* Color Indicator */}
-                <div
-                  className={`w-1.5 h-full rounded-full ${classItem.color} min-h-[100px]`}
-                />
-
-                {/* Main Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-lg">
-                          {classItem.code} - Section {classItem.section}
+          <h3 className="text-xl font-semibold mb-2">No classes found</h3>
+          <p className="text-muted-foreground max-w-sm mx-auto">
+            Try adjusting your search or filters, or create a new class to get started.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredClasses.map((classItem) => {
+            const theme = getClassColor(classItem.subjectCode);
+            
+            return (
+              <Link
+                href={`/dashboard/faculty/classes/${classItem.id}`}
+                key={classItem.id}
+                className="block group h-full"
+              >
+                <Card className="h-full flex flex-col overflow-hidden border-2 border-transparent hover:border-primary/10 transition-all duration-300 hover:shadow-xl bg-card">
+                  {/* Minimalist Header Strip */}
+                  <div 
+                    className="h-2 w-full"
+                    style={{ background: theme.gradient }}
+                  />
+                  
+                  <CardContent className="p-6 flex-1 flex flex-col gap-4">
+                    {/* Header Info */}
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs font-medium border-primary/20 text-primary bg-primary/5">
+                            {classItem.subjectCode}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground font-medium px-2 py-0.5 rounded-full bg-secondary">
+                            Sec {classItem.section}
+                          </span>
+                        </div>
+                        <h3 className="font-bold text-xl leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                          {classItem.subjectName}
                         </h3>
-                        <Badge variant="secondary" className="text-xs">
-                          {classItem.credits} Credits
-                        </Badge>
                       </div>
-                      <p className="text-base font-medium text-foreground mb-2">
-                        {classItem.name}
-                      </p>
+                      
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2 text-muted-foreground hover:text-foreground">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem>Edit Details</DropdownMenuItem>
+                          <DropdownMenuItem>View Students</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive">Archive Class</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
 
-                      {/* Stats Grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>
-                            <span className="font-semibold">
-                              {classItem.enrolledStudents}
-                            </span>
-                            <span className="text-muted-foreground">
-                              /{classItem.capacity}
-                            </span>
+                    {/* Key Metrics Grid */}
+                    <div className="grid grid-cols-2 gap-3 mt-2">
+                      <div className="bg-secondary/30 p-3 rounded-lg border border-border/50">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                          <Users className="h-3.5 w-3.5" />
+                          <span className="text-xs font-medium">Students</span>
+                        </div>
+                        <div className="text-lg font-semibold text-foreground">
+                          {classItem.enrolledStudents}
+                          <span className="text-xs text-muted-foreground font-normal ml-1">
+                            / {classItem.maximumSlots}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>
-                            Avg:{" "}
-                            <span className="font-semibold">
-                              {classItem.averageGrade}
-                            </span>
-                          </span>
+                      </div>
+                      
+                      <div className="bg-secondary/30 p-3 rounded-lg border border-border/50">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                          <BookOpen className="h-3.5 w-3.5" />
+                          <span className="text-xs font-medium">Credits</span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>
-                            Attendance:{" "}
-                            <span className="font-semibold">
-                              {classItem.attendanceRate}
-                            </span>
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>
-                            <span className="font-semibold">
-                              {classItem.pendingAssignments}
-                            </span>{" "}
-                            Pending
+                        <div className="text-lg font-semibold text-foreground">
+                          {classItem.credits}
+                          <span className="text-xs text-muted-foreground font-normal ml-1">
+                            Units
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Action Button */}
-                    <Button size="sm" variant="outline">
-                      Manage
-                    </Button>
-                  </div>
-
-                  {/* Schedule Info */}
-                  <div className="space-y-1">
-                    {classItem.schedule.map((sched, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-4 text-sm text-muted-foreground"
-                      >
-                        <div className="flex items-center gap-2 min-w-[140px]">
-                          <Calendar className="h-3.5 w-3.5" />
-                          <span className="font-medium">{sched.day}</span>
-                        </div>
-                        <div className="flex items-center gap-2 min-w-[180px]">
-                          <Clock className="h-3.5 w-3.5" />
-                          <span>{sched.time}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-3.5 w-3.5" />
-                          <span>{sched.room}</span>
-                        </div>
-                        <Badge variant="outline" className="text-xs ml-auto">
-                          {sched.type}
-                        </Badge>
+                    {/* Footer Info */}
+                    <div className="mt-auto pt-4 flex items-center justify-between text-sm text-muted-foreground border-t border-border/50">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>{classItem.schoolYear}</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredClasses.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No classes found</h3>
-            <p className="text-muted-foreground text-center">
-              Try adjusting your filters or search query
-            </p>
-          </CardContent>
-        </Card>
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span className="text-emerald-600 font-medium">Active</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
+        </div>
       )}
     </div>
   );
 }
+

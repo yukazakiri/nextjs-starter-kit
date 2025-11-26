@@ -14,29 +14,36 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
-import {
-  Calendar,
-  Clock,
-  MapPin,
-  User,
-  BookOpen,
-} from "lucide-react";
-import { useState } from "react";
+import { Calendar, Clock, MapPin, User, BookOpen } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useUser } from "@clerk/nextjs";
 
 interface ClassSession {
-  id: number;
+  id: string;
   subjectCode: string;
   subjectName: string;
   instructor: string;
-  type: "Lecture" | "Lab" | "Tutorial";
+  type: string;
   room: string;
   startTime: string;
   endTime: string;
   day: string;
-  color: string;
+  classId?: number;
+  section?: string;
 }
 
-const scheduleData: ClassSession[] = [
+const colors = [
+  "bg-blue-500",
+  "bg-green-500",
+  "bg-purple-500",
+  "bg-orange-500",
+  "bg-pink-500",
+  "bg-indigo-500",
+  "bg-red-500",
+  "bg-yellow-500",
+];
+
+const dummyScheduleData: ClassSession[] = [
   // Monday
   {
     id: 1,
@@ -190,12 +197,49 @@ const scheduleData: ClassSession[] = [
 
 const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const timeSlots = [
-  "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", 
-  "14:00", "15:00", "16:00", "17:00", "18:00"
+  "08:00",
+  "09:00",
+  "10:00",
+  "11:00",
+  "12:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+  "18:00",
 ];
 
 export default function SchedulePage() {
+  const { user } = useUser();
+  const [scheduleData, setScheduleData] = useState<ClassSession[]>([]);
+  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"timetable" | "daily">("timetable");
+
+  const studentId = user?.publicMetadata?.studentId as string | undefined;
+
+  useEffect(() => {
+    async function fetchSchedule() {
+      if (!studentId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/schedule?studentId=${studentId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setScheduleData(data.schedule || []);
+        }
+      } catch (error) {
+        console.error("Error fetching schedule:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchSchedule();
+  }, [studentId]);
 
   const getClassesForDay = (day: string) => {
     return scheduleData.filter((session) => session.day === day);
@@ -206,9 +250,43 @@ export default function SchedulePage() {
       const sessionStart = session.startTime.replace(":", "");
       const sessionEnd = session.endTime.replace(":", "");
       const currentTime = time.replace(":", "");
-      return session.day === day && sessionStart <= currentTime && currentTime < sessionEnd;
+      return (
+        session.day === day &&
+        sessionStart <= currentTime &&
+        currentTime < sessionEnd
+      );
     });
   };
+
+  const getColorForClass = (classId?: number) => {
+    if (!classId) return colors[0];
+    return colors[classId % colors.length];
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">Schedule</h1>
+            <p className="text-muted-foreground mt-2">
+              Loading your schedule...
+            </p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="text-lg font-semibold mb-2">
+              Loading schedule...
+            </div>
+            <p className="text-muted-foreground text-center">
+              Please wait while we fetch your schedule
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -220,7 +298,10 @@ export default function SchedulePage() {
             View your weekly class schedule
           </p>
         </div>
-        <Select value={viewMode} onValueChange={(value: "timetable" | "daily") => setViewMode(value)}>
+        <Select
+          value={viewMode}
+          onValueChange={(value: "timetable" | "daily") => setViewMode(value)}
+        >
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="View Mode" />
           </SelectTrigger>
@@ -241,9 +322,7 @@ export default function SchedulePage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{scheduleData.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              This week
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">This week</p>
           </CardContent>
         </Card>
         <Card>
@@ -256,9 +335,7 @@ export default function SchedulePage() {
             <div className="text-3xl font-bold">
               {scheduleData.filter((s) => s.type === "Lecture").length}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Sessions
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">Sessions</p>
           </CardContent>
         </Card>
         <Card>
@@ -271,9 +348,7 @@ export default function SchedulePage() {
             <div className="text-3xl font-bold">
               {scheduleData.filter((s) => s.type === "Lab").length}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Sessions
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">Sessions</p>
           </CardContent>
         </Card>
         <Card>
@@ -286,9 +361,7 @@ export default function SchedulePage() {
             <div className="text-3xl font-bold">
               {scheduleData.filter((s) => s.type === "Tutorial").length}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Sessions
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">Sessions</p>
           </CardContent>
         </Card>
       </div>
@@ -308,7 +381,10 @@ export default function SchedulePage() {
                       Time
                     </th>
                     {daysOfWeek.map((day) => (
-                      <th key={day} className="border p-3 bg-muted/50 text-center font-semibold">
+                      <th
+                        key={day}
+                        className="border p-3 bg-muted/50 text-center font-semibold"
+                      >
                         {day}
                       </th>
                     ))}
@@ -322,22 +398,27 @@ export default function SchedulePage() {
                       </td>
                       {daysOfWeek.map((day) => {
                         const classSession = getClassAtTime(day, time);
-                        const isStart = classSession && time === classSession.startTime;
-                        
+                        const isStart =
+                          classSession && time === classSession.startTime;
+
                         return (
-                          <td key={`${day}-${time}`} className="border p-2 h-16">
+                          <td
+                            key={`${day}-${time}`}
+                            className="border p-2 h-16"
+                          >
                             {isStart && classSession && (
                               <HoverCard>
                                 <HoverCardTrigger asChild>
                                   <div
-                                    className={`${classSession.color} text-white rounded p-2 cursor-pointer hover:opacity-90 transition-opacity h-full flex items-center justify-center`}
+                                    className={`${getColorForClass(classSession.classId)} text-white rounded p-2 cursor-pointer hover:opacity-90 transition-opacity h-full flex items-center justify-center`}
                                   >
                                     <div className="text-center">
                                       <div className="font-semibold text-sm">
                                         {classSession.subjectCode}
                                       </div>
                                       <div className="text-xs opacity-90">
-                                        {classSession.startTime} - {classSession.endTime}
+                                        {classSession.startTime} -{" "}
+                                        {classSession.endTime}
                                       </div>
                                     </div>
                                   </div>
@@ -345,7 +426,9 @@ export default function SchedulePage() {
                                 <HoverCardContent className="w-80">
                                   <div className="space-y-3">
                                     <div>
-                                      <h4 className="font-semibold text-lg">{classSession.subjectCode}</h4>
+                                      <h4 className="font-semibold text-lg">
+                                        {classSession.subjectCode}
+                                      </h4>
                                       <p className="text-sm text-muted-foreground">
                                         {classSession.subjectName}
                                       </p>
@@ -357,7 +440,10 @@ export default function SchedulePage() {
                                       </div>
                                       <div className="flex items-center gap-2 text-sm">
                                         <Clock className="h-4 w-4 text-muted-foreground" />
-                                        <span>{classSession.startTime} - {classSession.endTime}</span>
+                                        <span>
+                                          {classSession.startTime} -{" "}
+                                          {classSession.endTime}
+                                        </span>
                                       </div>
                                       <div className="flex items-center gap-2 text-sm">
                                         <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -365,7 +451,9 @@ export default function SchedulePage() {
                                       </div>
                                       <div className="flex items-center gap-2 text-sm">
                                         <BookOpen className="h-4 w-4 text-muted-foreground" />
-                                        <Badge variant="secondary">{classSession.type}</Badge>
+                                        <Badge variant="secondary">
+                                          {classSession.type}
+                                        </Badge>
                                       </div>
                                     </div>
                                   </div>
@@ -388,28 +476,31 @@ export default function SchedulePage() {
       {viewMode === "daily" && (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {daysOfWeek.map((day) => {
-            const dayClasses = getClassesForDay(day).sort((a, b) => 
-              a.startTime.localeCompare(b.startTime)
+            const dayClasses = getClassesForDay(day).sort((a, b) =>
+              a.startTime.localeCompare(b.startTime),
             );
-            
+
             return (
               <Card key={day} className="flex flex-col">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-center text-lg">{day}</CardTitle>
                   <p className="text-xs text-center text-muted-foreground">
-                    {dayClasses.length} {dayClasses.length === 1 ? 'class' : 'classes'}
+                    {dayClasses.length}{" "}
+                    {dayClasses.length === 1 ? "class" : "classes"}
                   </p>
                 </CardHeader>
                 <CardContent className="flex-1 space-y-3">
                   {dayClasses.length > 0 ? (
                     dayClasses.map((classSession) => (
-                      <Card 
-                        key={classSession.id} 
+                      <Card
+                        key={classSession.id}
                         className="hover:shadow-md transition-shadow cursor-pointer"
                       >
                         <CardContent className="p-3">
                           <div className="flex items-start gap-2 mb-2">
-                            <div className={`w-1 h-full rounded ${classSession.color} min-h-[60px]`} />
+                            <div
+                              className={`w-1 h-full rounded ${getColorForClass(classSession.classId)} min-h-[60px]`}
+                            />
                             <div className="flex-1 min-w-0">
                               <h4 className="font-semibold text-sm mb-1">
                                 {classSession.subjectCode}
@@ -420,13 +511,21 @@ export default function SchedulePage() {
                               <div className="space-y-1">
                                 <div className="flex items-center gap-1 text-xs">
                                   <Clock className="h-3 w-3 text-muted-foreground" />
-                                  <span>{classSession.startTime} - {classSession.endTime}</span>
+                                  <span>
+                                    {classSession.startTime} -{" "}
+                                    {classSession.endTime}
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-1 text-xs">
                                   <MapPin className="h-3 w-3 text-muted-foreground" />
-                                  <span className="truncate">{classSession.room}</span>
+                                  <span className="truncate">
+                                    {classSession.room}
+                                  </span>
                                 </div>
-                                <Badge variant="outline" className="text-xs mt-1">
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs mt-1"
+                                >
                                   {classSession.type}
                                 </Badge>
                               </div>
@@ -438,7 +537,9 @@ export default function SchedulePage() {
                   ) : (
                     <div className="flex flex-col items-center justify-center py-8 text-center">
                       <Calendar className="h-8 w-8 text-muted-foreground mb-2" />
-                      <p className="text-xs text-muted-foreground">No classes</p>
+                      <p className="text-xs text-muted-foreground">
+                        No classes
+                      </p>
                     </div>
                   )}
                 </CardContent>
