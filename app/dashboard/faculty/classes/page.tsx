@@ -52,19 +52,15 @@ export default function FacultyClassesPage() {
   const [semesterFilter, setSemesterFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
 
-  const facultyId = user?.publicMetadata?.facultyId as string | undefined;
-
   useEffect(() => {
     async function fetchClasses() {
-      if (!facultyId) {
+      if (!user) {
         setLoading(false);
         return;
       }
 
       try {
-        const response = await fetch(
-          `/api/faculty/classes?facultyId=${facultyId}`,
-        );
+        const response = await fetch("/api/faculty/classes");
         if (response.ok) {
           const data = await response.json();
           setClasses(data.classes || []);
@@ -77,7 +73,7 @@ export default function FacultyClassesPage() {
     }
 
     fetchClasses();
-  }, [facultyId]);
+  }, [user]);
 
   const filteredClasses = classes.filter((classItem) => {
     const matchesSearch =
@@ -180,33 +176,20 @@ export default function FacultyClassesPage() {
                 key={classItem.id}
                 className="block group h-full"
               >
-                <Card className="h-full flex flex-col overflow-hidden border-2 border-transparent hover:border-primary/10 transition-all duration-300 hover:shadow-xl bg-card">
-                  {/* Minimalist Header Strip */}
+                <Card className="h-full flex flex-col overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 bg-card group-hover:-translate-y-1">
+                  {/* Gradient Cover Header */}
                   <div 
-                    className="h-2 w-full"
+                    className="relative h-32 w-full p-6 flex flex-col justify-between"
                     style={{ background: theme.gradient }}
-                  />
-                  
-                  <CardContent className="p-6 flex-1 flex flex-col gap-4">
-                    {/* Header Info */}
-                    <div className="flex justify-between items-start gap-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs font-medium border-primary/20 text-primary bg-primary/5">
-                            {classItem.subjectCode}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground font-medium px-2 py-0.5 rounded-full bg-secondary">
-                            Sec {classItem.section}
-                          </span>
-                        </div>
-                        <h3 className="font-bold text-xl leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-2">
-                          {classItem.subjectName}
-                        </h3>
-                      </div>
+                  >
+                    <div className="flex justify-between items-start">
+                      <Badge className="bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm">
+                        {classItem.subjectCode}
+                      </Badge>
                       
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2 text-muted-foreground hover:text-foreground">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/20">
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -218,44 +201,44 @@ export default function FacultyClassesPage() {
                       </DropdownMenu>
                     </div>
 
-                    {/* Key Metrics Grid */}
-                    <div className="grid grid-cols-2 gap-3 mt-2">
-                      <div className="bg-secondary/30 p-3 rounded-lg border border-border/50">
-                        <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                          <Users className="h-3.5 w-3.5" />
-                          <span className="text-xs font-medium">Students</span>
-                        </div>
-                        <div className="text-lg font-semibold text-foreground">
-                          {classItem.enrolledStudents}
-                          <span className="text-xs text-muted-foreground font-normal ml-1">
-                            / {classItem.maximumSlots}
+                    <div className="flex justify-between items-end">
+                      <Badge variant="secondary" className="bg-white/90 text-black hover:bg-white font-semibold shadow-sm">
+                        Section {classItem.section}
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  <CardContent className="p-6 flex-1 flex flex-col gap-4">
+                    {/* Subject Name */}
+                    <div>
+                      <h3 className="font-bold text-lg leading-snug text-foreground group-hover:text-primary transition-colors line-clamp-2 mb-1">
+                        {classItem.subjectName}
+                      </h3>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>{classItem.schoolYear} • {classItem.semester}</span>
+                      </div>
+                    </div>
+
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t border-border/50">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Students</span>
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-primary" />
+                          <span className="font-semibold text-foreground">
+                            {classItem.enrolledStudents}
+                            <span className="text-muted-foreground font-normal text-xs ml-1">/ {classItem.maximumSlots}</span>
                           </span>
                         </div>
                       </div>
                       
-                      <div className="bg-secondary/30 p-3 rounded-lg border border-border/50">
-                        <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                          <BookOpen className="h-3.5 w-3.5" />
-                          <span className="text-xs font-medium">Credits</span>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Credits</span>
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="h-4 w-4 text-primary" />
+                          <span className="font-semibold text-foreground">{classItem.credits} Units</span>
                         </div>
-                        <div className="text-lg font-semibold text-foreground">
-                          {classItem.credits}
-                          <span className="text-xs text-muted-foreground font-normal ml-1">
-                            Units
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Footer Info */}
-                    <div className="mt-auto pt-4 flex items-center justify-between text-sm text-muted-foreground border-t border-border/50">
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5" />
-                        <span>{classItem.schoolYear}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        <span className="text-emerald-600 font-medium">Active</span>
                       </div>
                     </div>
                   </CardContent>

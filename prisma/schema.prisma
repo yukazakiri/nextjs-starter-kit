@@ -190,17 +190,20 @@ model admin_transactions {
 }
 
 model announcements {
-  id         BigInt    @id(map: "idx_21484_primary") @default(autoincrement())
-  title      String    @db.VarChar(255)
-  content    String
-  slug       String    @db.VarChar(255)
-  status     String    @db.VarChar(255)
-  user_id    BigInt
-  created_at DateTime? @db.Timestamptz(6)
-  updated_at DateTime? @db.Timestamptz(6)
-  users      users     @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "announcements_user_id_foreign")
+  id          BigInt    @id(map: "idx_21484_primary") @default(autoincrement())
+  title       String    @db.VarChar(255)
+  content     String
+  slug        String    @db.VarChar(255)
+  status      String    @db.VarChar(255)
+  user_id     BigInt
+  created_at  DateTime? @db.Timestamptz(6)
+  updated_at  DateTime? @db.Timestamptz(6)
+  attachments Json?     @db.Json
+  class_id    Int?
+  users       users     @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "announcements_user_id_foreign")
 
   @@index([user_id], map: "idx_21484_announcements_user_id_foreign")
+  @@index([class_id], map: "idx_announcements_class_id")
 }
 
 model attendances {
@@ -462,26 +465,29 @@ model class_attendance_settings {
 }
 
 model class_enrollments {
-  id                  BigInt    @id(map: "idx_21599_primary") @default(autoincrement())
-  class_id            Int
-  student_id          Decimal   @db.Decimal
-  completion_date     DateTime? @db.Date
-  status              Boolean   @default(true)
-  remarks             String?
-  prelim_grade        Decimal?  @db.Decimal(8, 2)
-  midterm_grade       Decimal?  @db.Decimal(8, 2)
-  finals_grade        Decimal?  @db.Decimal(8, 2)
-  total_average       Decimal?  @db.Decimal(8, 2)
-  created_at          DateTime? @db.Timestamptz(6)
-  updated_at          DateTime? @db.Timestamptz(6)
-  deleted_at          DateTime? @db.Timestamptz(6)
-  is_grades_finalized Boolean   @default(false)
-  is_grades_verified  Boolean   @default(false)
-  verified_by         BigInt?
-  verified_at         DateTime? @db.Timestamp(0)
-  verification_notes  String?
-  classes             classes   @relation(fields: [class_id], references: [id], onUpdate: Restrict, map: "class_enrollments_class_id_foreign")
-  users               users?    @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "class_enrollments_verified_by_foreign")
+  id                   BigInt    @id(map: "idx_21599_primary") @default(autoincrement())
+  class_id             Int
+  student_id           Decimal   @db.Decimal
+  completion_date      DateTime? @db.Date
+  status               Boolean   @default(true)
+  remarks              String?
+  prelim_grade         Decimal?  @db.Decimal(8, 2)
+  midterm_grade        Decimal?  @db.Decimal(8, 2)
+  finals_grade         Decimal?  @db.Decimal(8, 2)
+  total_average        Decimal?  @db.Decimal(8, 2)
+  created_at           DateTime? @db.Timestamptz(6)
+  updated_at           DateTime? @db.Timestamptz(6)
+  deleted_at           DateTime? @db.Timestamptz(6)
+  is_grades_finalized  Boolean   @default(false)
+  is_grades_verified   Boolean   @default(false)
+  verified_by          BigInt?
+  verified_at          DateTime? @db.Timestamp(0)
+  verification_notes   String?
+  is_finals_submitted  Boolean   @default(false)
+  is_midterm_submitted Boolean   @default(false)
+  is_prelim_submitted  Boolean   @default(false)
+  classes              classes   @relation(fields: [class_id], references: [id], onUpdate: Restrict, map: "class_enrollments_class_id_foreign")
+  users                users?    @relation(fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "class_enrollments_verified_by_foreign")
 
   @@index([class_id], map: "idx_21599_class_enrollments_class_id_foreign")
   @@index([student_id], map: "idx_21599_class_enrollments_student_id_foreign")
@@ -2359,8 +2365,9 @@ model server_metrics {
   @@index([site_id], map: "idx_22227_server_metrics_site_id_foreign")
 }
 
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model sessions {
-  id            String  @id(map: "idx_22233_primary") @db.VarChar(255)
+  id            String  @db.VarChar(255)
   user_id       BigInt?
   ip_address    String? @db.VarChar(255)
   user_agent    String?
@@ -2369,6 +2376,7 @@ model sessions {
 
   @@index([last_activity], map: "idx_22233_sessions_last_activity_index")
   @@index([user_id], map: "idx_22233_sessions_user_id_index")
+  @@ignore
 }
 
 model settings {
@@ -2921,7 +2929,7 @@ model teams {
 }
 
 model telescope_entries {
-  sequence                BigInt                   @id @default(autoincrement())
+  sequence                BigInt                   @default(autoincrement())
   uuid                    String                   @unique(map: "telescope_entries_uuid_unique") @db.Uuid
   batch_id                String                   @db.Uuid
   family_hash             String?                  @db.VarChar(255)

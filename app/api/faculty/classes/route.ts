@@ -1,18 +1,49 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAcademicSettings } from "@/lib/enrollment";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const facultyId = searchParams.get("facultyId");
-
-    if (!facultyId) {
+    // Get authenticated user
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json(
-        { error: "Faculty ID is required" },
+        { error: "Unauthorized" },
+        { status: 401 },
+      );
+    }
+
+    // Get user email from Clerk
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const userEmail = user.emailAddresses[0]?.emailAddress;
+
+    if (!userEmail) {
+      return NextResponse.json(
+        { error: "Email not found" },
         { status: 400 },
       );
     }
+
+    // Find faculty by email
+    const faculty = await prisma.faculty.findUnique({
+      where: {
+        email: userEmail,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!faculty) {
+      return NextResponse.json(
+        { error: "Faculty not found" },
+        { status: 404 },
+      );
+    }
+
+    const facultyId = faculty.id;
 
     // Get current academic settings
     const academicSettings = await getCurrentAcademicSettings();

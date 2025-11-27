@@ -7,7 +7,13 @@ import { PeopleTab } from "./people-tab";
 import { GradesTab } from "./grades-tab";
 import { useParams } from "next/navigation";
 
-export function ClassTabs() {
+interface ClassTabsProps {
+  averageGrade?: string;
+  latestResource?: any;
+  recentResources?: any[];
+}
+
+export function ClassTabs({ averageGrade, latestResource, recentResources }: ClassTabsProps) {
   const params = useParams();
   const classId = params?.classId as string;
 
@@ -47,7 +53,12 @@ export function ClassTabs() {
 
         <div className="py-6">
           <TabsContent value="stream" className="mt-0 animate-in fade-in-50 duration-300">
-            <StreamTab classCode={classId} />
+            <StreamTab
+              classId={classId}
+              averageGrade={averageGrade}
+              latestResource={latestResource}
+              recentResources={recentResources}
+            />
           </TabsContent>
 
           <TabsContent value="classwork" className="mt-0 animate-in fade-in-50 duration-300">

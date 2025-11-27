@@ -3,6 +3,7 @@ import { ClassTabs } from "../_components/class-tabs";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
@@ -94,6 +95,52 @@ async function getClassDetails(classId: string, facultyId: string) {
         ? `${Math.round((presentAttendance / totalAttendance) * 100)}%`
         : "N/A";
 
+    // Get recent resources (top 5 attachments from announcements)
+    const announcementsWithAttachments = await prisma.announcements.findMany({
+      where: {
+        class_id: classInfo.id,
+        attachments: {
+          not: Prisma.JsonNull,
+        },
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+      select: {
+        attachments: true,
+        created_at: true,
+      },
+      take: 10, // Get more announcements to ensure we have 5 files
+    });
+
+    const recentResources: Array<{
+      name: string;
+      type: string;
+      url: string;
+      date: Date;
+      size?: number;
+    }> = [];
+
+    // Flatten all attachments from announcements
+    for (const announcement of announcementsWithAttachments) {
+      if (announcement.attachments) {
+        const attachments = announcement.attachments as any[];
+        for (const attachment of attachments) {
+          recentResources.push({
+            name: attachment.name,
+            type: attachment.type,
+            url: attachment.url,
+            size: attachment.size,
+            date: announcement.created_at,
+          });
+          if (recentResources.length >= 5) break;
+        }
+        if (recentResources.length >= 5) break;
+      }
+    }
+
+    const latestResource = recentResources.length > 0 ? recentResources[0] : null;
+
     return {
       id: classInfo.id,
       code: classInfo.subject?.code || classInfo.subject_code || "N/A",
@@ -111,6 +158,8 @@ async function getClassDetails(classId: string, facultyId: string) {
       gradeLevel: classInfo.grade_level,
       lecture: Number(classInfo.subject?.lecture) || 0,
       laboratory: Number(classInfo.subject?.laboratory) || 0,
+      latestResource,
+      recentResources,
     };
   } catch (error) {
     console.error("Error fetching class details:", error);
@@ -131,14 +180,28 @@ export default async function ClassDetailPage({
 
   const client = await clerkClient();
   const user = await client.users.getUser(userId);
-  const facultyId = user.publicMetadata?.facultyId as string | undefined;
+  const userEmail = user.emailAddresses[0]?.emailAddress;
 
-  if (!facultyId) {
+  if (!userEmail) {
+    redirect("/sign-in");
+  }
+
+  // Find faculty by email
+  const faculty = await prisma.faculty.findUnique({
+    where: {
+      email: userEmail,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!faculty) {
     redirect("/onboarding");
   }
 
   const { classId } = await params;
-  const classDetails = await getClassDetails(classId, facultyId);
+  const classDetails = await getClassDetails(classId, faculty.id);
 
   if (!classDetails) {
     return (
@@ -159,7 +222,11 @@ export default async function ClassDetailPage({
     <div className="flex flex-col h-full">
       <ClassHeader classDetails={classDetails} />
       <div className="flex-grow">
-        <ClassTabs />
+        <ClassTabs
+          averageGrade={classDetails.averageGrade}
+          latestResource={classDetails.latestResource}
+          recentResources={classDetails.recentResources}
+        />
       </div>
     </div>
   );
