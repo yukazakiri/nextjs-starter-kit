@@ -60,6 +60,7 @@ export function AnnouncementList({ classId }: AnnouncementListProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFileInfo, setShowFileInfo] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [filePreviews, setFilePreviews] = useState<Map<number, string>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -342,115 +343,137 @@ export function AnnouncementList({ classId }: AnnouncementListProps) {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      {/* Post Announcement Card */}
-      <Card className="shadow-sm">
-        <CardContent className="p-4">
-          <div className="flex gap-3">
-            <Avatar className="h-10 w-10">
-              <AvatarImage src={user?.imageUrl} />
-              <AvatarFallback className="bg-primary text-primary-foreground">
-                {userInitials}
-              </AvatarFallback>
-            </Avatar>
+      {/* Post Announcement Input */}
+      <div className="flex gap-4 items-start">
+        <Avatar className="h-10 w-10 border mt-1">
+          <AvatarImage src={user?.imageUrl} />
+          <AvatarFallback className="bg-primary/10 text-primary font-medium">
+            {userInitials}
+          </AvatarFallback>
+        </Avatar>
+        
+        <div className={`flex-1 transition-all duration-200 ${isExpanded ? 'w-full' : ''}`}>
+          {!isExpanded ? (
             <div 
-              className={`flex-1 space-y-3 ${isDragging ? 'opacity-50' : ''}`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+              className="w-full rounded-2xl border bg-background/50 hover:bg-background/80 transition-all cursor-text py-3 px-4 text-muted-foreground text-sm shadow-sm hover:shadow-md"
+              onClick={() => setIsExpanded(true)}
             >
-              <div className="relative">
+              Announce something to your class...
+            </div>
+          ) : (
+            <div className="flex flex-col rounded-2xl border bg-background shadow-lg animate-in fade-in-50 zoom-in-95 duration-200 overflow-hidden ring-1 ring-primary/5">
+              {/* Input Area */}
+              <div 
+                className={`relative transition-all ${isDragging ? 'bg-primary/5' : ''}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
                 <Textarea
-                  placeholder="Announce something to your class or drag & drop files here"
+                  placeholder="Announce something to your class..."
                   value={newAnnouncement}
                   onChange={(e) => setNewAnnouncement(e.target.value)}
-                  className="min-h-[80px] resize-none"
+                  className="min-h-[120px] w-full resize-none border-0 bg-transparent p-4 placeholder:text-muted-foreground focus-visible:ring-0 text-base"
+                  autoFocus
                 />
+                
                 {isDragging && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-md">
-                    <p className="text-sm font-medium text-primary">Drop files here</p>
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-[1px]">
+                    <div className="flex flex-col items-center gap-2 text-primary font-medium animate-bounce">
+                      <Download className="h-8 w-8" />
+                      <p>Drop files to attach</p>
+                    </div>
                   </div>
                 )}
               </div>
-              
+
               {/* Error Message */}
               {error && (
-                <div className="p-3 border border-destructive/50 bg-destructive/10 rounded-lg">
-                  <p className="text-sm text-destructive">{error}</p>
+                <div className="px-4 pb-2">
+                  <div className="flex items-center gap-2 p-2 text-xs text-destructive bg-destructive/10 rounded-md border border-destructive/20">
+                    <Info className="h-3 w-3" />
+                    {error}
+                  </div>
                 </div>
               )}
 
-              {/* Selected Files */}
+              {/* Selected Files Grid */}
               {selectedFiles.length > 0 && (
-                <div className="space-y-2">
-                  {selectedFiles.map((file, idx) => {
-                    const isImage = file.type.startsWith('image/');
-                    const preview = filePreviews.get(idx);
+                <div className="px-4 pb-2">
+                  <div className="flex flex-wrap gap-2">
+                    {selectedFiles.map((file, idx) => {
+                      const isImage = file.type.startsWith('image/');
+                      const preview = filePreviews.get(idx);
 
-                    return (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-3 p-3 border rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                      >
-                        {isImage && preview ? (
-                          <div className="relative w-12 h-12 rounded overflow-hidden flex-shrink-0">
-                            <img
-                              src={preview}
-                              alt={file.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          getFileIcon(file.type, file.name)
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{file.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatFileSize(file.size)}
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => removeFile(idx)}
+                      return (
+                        <div
+                          key={idx}
+                          className="group relative flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors max-w-[200px]"
                         >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    );
-                  })}
+                          {isImage && preview ? (
+                            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md border bg-background">
+                              <img
+                                src={preview}
+                                alt={file.name}
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background">
+                              {getFileIcon(file.type, file.name)}
+                            </div>
+                          )}
+                          
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate text-foreground/90">
+                              {file.name}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {formatFileSize(file.size)}
+                            </p>
+                          </div>
+
+                          <button
+                            className="h-5 w-5 flex items-center justify-center rounded-full hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
+                            onClick={() => removeFile(idx)}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
-              {/* File Type Info */}
+              {/* File Info Panel */}
               {showFileInfo && (
-                <div className="p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
-                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                    Supported File Types:
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-blue-700 dark:text-blue-300">
-                    <div>
-                      <p className="font-semibold mb-1">Documents:</p>
-                      <p>PDF, Word, Excel, PowerPoint (max 20MB)</p>
+                <div className="px-4 pb-2">
+                  <div className="p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        Supported File Types
+                      </p>
+                      <button 
+                        className="text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-full p-1"
+                        onClick={() => setShowFileInfo(false)}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
                     </div>
-                    <div>
-                      <p className="font-semibold mb-1">Media:</p>
-                      <p>Images (max 10MB), Videos (max 100MB), Audio (max 20MB)</p>
-                    </div>
-                    <div>
-                      <p className="font-semibold mb-1">Archives:</p>
-                      <p>ZIP, RAR (max 50MB)</p>
-                    </div>
-                    <div>
-                      <p className="font-semibold mb-1">Text:</p>
-                      <p>TXT files (max 5MB)</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-blue-600/80 dark:text-blue-400/80">
+                      <p>• Documents (PDF, Word, Excel, PPT) - 20MB</p>
+                      <p>• Images (JPG, PNG, WebP) - 10MB</p>
+                      <p>• Video (MP4, MOV) - 100MB</p>
+                      <p>• Archives (ZIP, RAR) - 50MB</p>
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className="flex items-center justify-between">
-                <div className="flex gap-1">
+              {/* Action Bar */}
+              <div className="p-3 flex items-center justify-between border-t bg-muted/5">
+                <div className="flex items-center gap-1">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -461,44 +484,62 @@ export function AnnouncementList({ classId }: AnnouncementListProps) {
                   />
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-muted-foreground hover:text-foreground"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full"
+                    title="Attach files"
                   >
-                    <Paperclip className="h-4 w-4 mr-2" />
-                    Attach Files
+                    <Paperclip className="h-4 w-4" />
                   </Button>
+                  
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     onClick={() => setShowFileInfo(!showFileInfo)}
-                    className="text-muted-foreground hover:text-foreground"
+                    className={`h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full ${showFileInfo ? 'bg-primary/10 text-primary' : ''}`}
+                    title="File info"
                   >
                     <Info className="h-4 w-4" />
                   </Button>
                 </div>
-                <Button
-                  onClick={handlePost}
-                  disabled={(!newAnnouncement.trim() && selectedFiles.length === 0) || isPosting}
-                  size="sm"
-                >
-                  {isPosting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Posting...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" />
-                      Post
-                    </>
-                  )}
-                </Button>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsExpanded(false);
+                      setNewAnnouncement("");
+                      setSelectedFiles([]);
+                      setError(null);
+                    }}
+                    className="text-muted-foreground hover:text-foreground h-8 px-3 text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handlePost}
+                    disabled={(!newAnnouncement.trim() && selectedFiles.length === 0) || isPosting}
+                    size="sm"
+                    className="h-8 px-4 text-xs font-medium rounded-full"
+                  >
+                    {isPosting ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                        Posting...
+                      </>
+                    ) : (
+                      <>
+                        Post
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          )}
+        </div>
+      </div>
 
       {/* Announcements List */}
       {announcements.length === 0 ? (
