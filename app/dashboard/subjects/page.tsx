@@ -1,524 +1,456 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { BookOpen, Calendar, Clock, MapPin, Search, User } from "lucide-react";
+  BookOpen,
+  GraduationCap,
+  TrendingUp,
+  Award,
+  AlertCircle,
+  Calendar,
+  Clock,
+  MapPin,
+  FileText,
+  Users,
+} from "lucide-react";
 import { useState, useEffect } from "react";
-import { SubjectDetailModal } from "./_components/subject-detail-modal";
 import { useAuth } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
+import { useSemester } from "@/contexts/semester-context";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-const subjects = [
-  {
-    id: 1,
-    code: "CS 401",
-    name: "Advanced Web Development",
-    instructor: "Dr. Sarah Smith",
-    instructorEmail: "sarah.smith@university.edu",
-    instructorPhone: "+1 (555) 123-4567",
-    credits: 3,
-    semester: "1st Semester",
-    year: "2024-2025",
-    schedule: [
-      {
-        day: "Monday",
-        time: "9:00 AM - 10:30 AM",
-        room: "Room 301, Building A",
-        type: "Lecture",
-      },
-      {
-        day: "Wednesday",
-        time: "9:00 AM - 10:30 AM",
-        room: "Room 301, Building A",
-        type: "Lecture",
-      },
-      {
-        day: "Friday",
-        time: "2:00 PM - 4:00 PM",
-        room: "Lab 205, Building B",
-        type: "Lab",
-      },
-    ],
-    grade: "A",
-    color: "bg-blue-500",
-    units: 3,
-    courseType: "Lecture & Lab",
-    enrollmentDate: "August 15, 2024",
-    totalStudents: 45,
-    resources: [
-      {
-        type: "syllabus",
-        name: "Course Syllabus",
-        url: "#",
-      },
-      {
-        type: "video",
-        name: "Lecture Recordings",
-        url: "#",
-      },
-      {
-        type: "link",
-        name: "Course Materials",
-        url: "#",
-      },
-    ],
-  },
-  {
-    id: 2,
-    code: "CS 305",
-    name: "Database Systems",
-    instructor: "Prof. Michael Johnson",
-    instructorEmail: "michael.johnson@university.edu",
-    instructorPhone: "+1 (555) 234-5678",
-    credits: 4,
-    semester: "1st Semester",
-    year: "2024-2025",
-    schedule: [
-      {
-        day: "Tuesday",
-        time: "11:00 AM - 12:30 PM",
-        room: "Room 402, Building A",
-        type: "Lecture",
-      },
-      {
-        day: "Thursday",
-        time: "11:00 AM - 12:30 PM",
-        room: "Room 402, Building A",
-        type: "Lecture",
-      },
-      {
-        day: "Thursday",
-        time: "2:00 PM - 4:00 PM",
-        room: "Lab 301, Building B",
-        type: "Lab",
-      },
-    ],
-    grade: "A-",
-    color: "bg-green-500",
-    units: 4,
-    courseType: "Lecture & Lab",
-    enrollmentDate: "August 15, 2024",
-    totalStudents: 38,
-    resources: [
-      {
-        type: "syllabus",
-        name: "Course Syllabus",
-        url: "#",
-      },
-      {
-        type: "video",
-        name: "Tutorial Videos",
-        url: "#",
-      },
-      {
-        type: "link",
-        name: "Practice Exercises",
-        url: "#",
-      },
-    ],
-  },
-  {
-    id: 3,
-    code: "CS 450",
-    name: "Machine Learning",
-    instructor: "Dr. Emily Williams",
-    instructorEmail: "emily.williams@university.edu",
-    instructorPhone: "+1 (555) 345-6789",
-    credits: 3,
-    semester: "1st Semester",
-    year: "2024-2025",
-    schedule: [
-      {
-        day: "Monday",
-        time: "2:00 PM - 3:30 PM",
-        room: "Room 501, Building C",
-        type: "Lecture",
-      },
-      {
-        day: "Wednesday",
-        time: "2:00 PM - 3:30 PM",
-        room: "Room 501, Building C",
-        type: "Lecture",
-      },
-    ],
-    grade: "B+",
-    color: "bg-purple-500",
-    units: 3,
-    courseType: "Lecture",
-    enrollmentDate: "August 15, 2024",
-    totalStudents: 52,
-    resources: [
-      {
-        type: "syllabus",
-        name: "Course Syllabus",
-        url: "#",
-      },
-      {
-        type: "video",
-        name: "Lecture Series",
-        url: "#",
-      },
-      {
-        type: "link",
-        name: "Jupyter Notebooks",
-        url: "#",
-      },
-    ],
-  },
-  {
-    id: 4,
-    code: "CS 320",
-    name: "Software Engineering",
-    instructor: "Prof. David Brown",
-    instructorEmail: "david.brown@university.edu",
-    instructorPhone: "+1 (555) 456-7890",
-    credits: 3,
-    semester: "1st Semester",
-    year: "2024-2025",
-    schedule: [
-      {
-        day: "Tuesday",
-        time: "4:00 PM - 5:30 PM",
-        room: "Room 302, Building A",
-        type: "Lecture",
-      },
-      {
-        day: "Friday",
-        time: "10:00 AM - 12:00 PM",
-        room: "Room 302, Building A",
-        type: "Tutorial",
-      },
-    ],
-    grade: "A",
-    color: "bg-orange-500",
-    units: 3,
-    courseType: "Lecture & Tutorial",
-    enrollmentDate: "August 15, 2024",
-    totalStudents: 42,
-    resources: [
-      {
-        type: "syllabus",
-        name: "Course Syllabus",
-        url: "#",
-      },
-      {
-        type: "video",
-        name: "Workshop Recordings",
-        url: "#",
-      },
-      {
-        type: "link",
-        name: "Project Guidelines",
-        url: "#",
-      },
-    ],
-  },
-  {
-    id: 5,
-    code: "MATH 301",
-    name: "Linear Algebra",
-    instructor: "Dr. Jennifer Lee",
-    instructorEmail: "jennifer.lee@university.edu",
-    instructorPhone: "+1 (555) 567-8901",
-    credits: 3,
-    semester: "1st Semester",
-    year: "2024-2025",
-    schedule: [
-      {
-        day: "Monday",
-        time: "11:00 AM - 12:30 PM",
-        room: "Room 201, Building D",
-        type: "Lecture",
-      },
-      {
-        day: "Wednesday",
-        time: "11:00 AM - 12:30 PM",
-        room: "Room 201, Building D",
-        type: "Lecture",
-      },
-    ],
-    grade: "A-",
-    color: "bg-pink-500",
-    units: 3,
-    courseType: "Lecture",
-    enrollmentDate: "August 15, 2024",
-    totalStudents: 35,
-    resources: [
-      {
-        type: "syllabus",
-        name: "Course Syllabus",
-        url: "#",
-      },
-      {
-        type: "link",
-        name: "Problem Sets",
-        url: "#",
-      },
-      {
-        type: "link",
-        name: "Solution Manual",
-        url: "#",
-      },
-    ],
-  },
-  // Previous year subjects
-  {
-    id: 6,
-    code: "CS 201",
-    name: "Data Structures",
-    instructor: "Prof. Robert Chen",
-    instructorEmail: "robert.chen@university.edu",
-    instructorPhone: "+1 (555) 678-9012",
-    credits: 4,
-    semester: "2nd Semester",
-    year: "2023-2024",
-    schedule: [
-      {
-        day: "Monday",
-        time: "10:00 AM - 11:30 AM",
-        room: "Room 105, Building A",
-        type: "Lecture",
-      },
-      {
-        day: "Wednesday",
-        time: "10:00 AM - 11:30 AM",
-        room: "Room 105, Building A",
-        type: "Lecture",
-      },
-    ],
-    grade: "A",
-    color: "bg-cyan-500",
-    units: 4,
-    courseType: "Lecture",
-    enrollmentDate: "January 10, 2024",
-    totalStudents: 48,
-    resources: [
-      {
-        type: "syllabus",
-        name: "Course Syllabus",
-        url: "#",
-      },
-    ],
-  },
-];
+interface ClassData {
+  enrollmentId: string;
+  classId: number;
+  subjectCode: string;
+  subjectName: string;
+  subjectDescription: string | null;
+  section: string | null;
+  room: string | null;
+  semester: string | null;
+  schoolYear: string | null;
+  academicYear: string | null;
+  units: number | null;
+  lecture: number | null;
+  laboratory: number | null;
+  prelimGrade: number | null;
+  midtermGrade: number | null;
+  finalsGrade: number | null;
+  totalAverage: number | null;
+  isGradesFinalized: boolean;
+  isPrelimSubmitted: boolean;
+  isMidtermSubmitted: boolean;
+  isFinalsSubmitted: boolean;
+  facultyId: string | null;
+  enrolledAt: string;
+  completionDate: string | null;
+}
 
-export default function SubjectsPage() {
-  const router = useRouter();
-  const { sessionClaims, isLoaded } = useAuth();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [semesterFilter, setSemesterFilter] = useState("all");
-  const [yearFilter, setYearFilter] = useState("2024-2025");
-  const [selectedSubject, setSelectedSubject] = useState<
-    (typeof subjects)[0] | null
-  >(null);
-  const [modalOpen, setModalOpen] = useState(false);
+export default function MyClassesPage() {
+  const { sessionClaims } = useAuth();
+  const { semester, schoolYear } = useSemester();
+  const [classes, setClasses] = useState<ClassData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedClass, setSelectedClass] = useState<ClassData | null>(null);
+  const [filter, setFilter] = useState<"current" | "all">("current");
 
-  // Redirect faculty users to their classes page
+  const studentId = (sessionClaims?.metadata as { studentId?: string })
+    ?.studentId;
+
   useEffect(() => {
-    if (isLoaded) {
-      const userRole = (sessionClaims?.metadata as { role?: string })?.role;
-      if (userRole === "faculty") {
-        router.push("/dashboard/faculty/classes");
+    async function fetchClasses() {
+      console.log("🔍 My Classes Page - Starting fetch with:", {
+        studentId,
+        semester,
+        schoolYear,
+        filter,
+      });
+
+      if (!studentId) {
+        console.warn("⚠️ No student ID available");
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const params = new URLSearchParams({ studentId });
+
+        // Apply filter
+        if (filter === "current" && semester && schoolYear) {
+          params.append("semester", semester);
+          params.append("schoolYear", schoolYear);
+          console.log("🔍 Filtering by current semester:", { semester, schoolYear });
+        }
+
+        const url = `/api/student/subjects?${params.toString()}`;
+        console.log("📡 Fetching from:", url);
+
+        const response = await fetch(url);
+        console.log("📡 Response status:", response.status);
+
+        const data = await response.json();
+        console.log("📦 Response data:", data);
+
+        if (data.success) {
+          console.log("✅ Successfully fetched classes:", data.subjects.length);
+          setClasses(data.subjects);
+        } else {
+          console.error("❌ Failed to fetch classes:", data.error, data.details);
+        }
+      } catch (error) {
+        console.error("💥 Error fetching classes:", error);
+      } finally {
+        setIsLoading(false);
       }
     }
-  }, [isLoaded, sessionClaims, router]);
 
-  const filteredSubjects = subjects.filter((subject) => {
-    const matchesSearch =
-      subject.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      subject.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      subject.instructor.toLowerCase().includes(searchQuery.toLowerCase());
+    fetchClasses();
+  }, [studentId, semester, schoolYear, filter]);
 
-    const matchesSemester =
-      semesterFilter === "all" || subject.semester === semesterFilter;
-
-    const matchesYear = yearFilter === "all" || subject.year === yearFilter;
-
-    return matchesSearch && matchesSemester && matchesYear;
-  });
-
-  const handleSubjectClick = (subject: (typeof subjects)[0]) => {
-    setSelectedSubject(subject);
-    setModalOpen(true);
+  const getGradeColor = (grade: number | null) => {
+    if (!grade) return "text-slate-400";
+    if (grade <= 1.5) return "text-emerald-600";
+    if (grade <= 2.0) return "text-blue-600";
+    if (grade <= 2.5) return "text-amber-600";
+    if (grade <= 3.0) return "text-orange-600";
+    return "text-red-600";
   };
 
-  const currentYearSubjects = filteredSubjects.filter(
-    (s) => s.year === yearFilter,
-  );
-  const totalCredits = currentYearSubjects.reduce(
-    (sum, s) => sum + s.credits,
-    0,
-  );
+  const getGradeBadgeColor = (grade: number | null) => {
+    if (!grade) return "bg-slate-100 text-slate-600 border-slate-300";
+    if (grade <= 1.5) return "bg-emerald-100 text-emerald-800 border-emerald-300";
+    if (grade <= 2.0) return "bg-blue-100 text-blue-800 border-blue-300";
+    if (grade <= 2.5) return "bg-amber-100 text-amber-800 border-amber-300";
+    if (grade <= 3.0) return "bg-orange-100 text-orange-800 border-orange-300";
+    return "bg-red-100 text-red-800 border-red-300";
+  };
+
+  const getGradeLabel = (grade: number | null) => {
+    if (!grade) return "No Grade";
+    if (grade <= 1.5) return "Excellent";
+    if (grade <= 2.0) return "Very Good";
+    if (grade <= 2.5) return "Good";
+    if (grade <= 3.0) return "Passing";
+    return "Failed";
+  };
+
+  const calculateCurrentGrade = (classData: ClassData) => {
+    if (classData.totalAverage) return classData.totalAverage;
+    if (classData.finalsGrade) return classData.finalsGrade;
+    if (classData.midtermGrade) return classData.midtermGrade;
+    if (classData.prelimGrade) return classData.prelimGrade;
+    return null;
+  };
+
+  const totalUnits = classes.reduce((sum, c) => sum + (c.units || 0), 0);
+  const completedClasses = classes.filter((c) => c.isGradesFinalized).length;
+  const averageGrade =
+    classes.filter((c) => c.totalAverage).length > 0
+      ? classes.reduce((sum, c) => sum + (c.totalAverage || 0), 0) /
+        classes.filter((c) => c.totalAverage).length
+      : null;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading your classes...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">My Subjects</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage and view your enrolled subjects
-        </p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
+      <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+        {/* Header */}
+        <div className="space-y-3">
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-900">
+            My Classes
+          </h1>
+          <p className="text-slate-600">
+            View your enrolled classes and track your academic progress
+          </p>
+        </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search subjects..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="border-2">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-slate-600">Total Classes</p>
+                <Users className="h-4 w-4 text-blue-600" />
               </div>
-              <Select value={yearFilter} onValueChange={setYearFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="School Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Years</SelectItem>
-                  <SelectItem value="2024-2025">2024-2025</SelectItem>
-                  <SelectItem value="2023-2024">2023-2024</SelectItem>
-                  <SelectItem value="2022-2023">2022-2023</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={semesterFilter} onValueChange={setSemesterFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Semester" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Semesters</SelectItem>
-                  <SelectItem value="1st Semester">1st Semester</SelectItem>
-                  <SelectItem value="2nd Semester">2nd Semester</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Summary Stats */}
-            <div className="flex items-center gap-6 pt-2 border-t">
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">
-                  <span className="font-semibold">
-                    {filteredSubjects.length}
-                  </span>{" "}
-                  Subject{filteredSubjects.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm">
-                  <span className="font-semibold">{totalCredits}</span> Total
-                  Credits
-                </span>
-              </div>
-              {yearFilter !== "all" && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">
-                    School Year:{" "}
-                    <span className="font-medium text-foreground">
-                      {yearFilter}
-                    </span>
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Subject List */}
-      <div className="space-y-3">
-        {filteredSubjects.map((subject) => (
-          <Card
-            key={subject.id}
-            className="cursor-pointer hover:shadow-md transition-all hover:border-primary/50"
-            onClick={() => handleSubjectClick(subject)}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start gap-4">
-                {/* Color Indicator */}
-                <div
-                  className={`w-1.5 h-full rounded-full ${subject.color} min-h-[80px]`}
-                />
-
-                {/* Main Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-lg">
-                          {subject.code}
-                        </h3>
-                        <Badge variant="secondary" className="text-xs">
-                          {subject.credits} Credits
-                        </Badge>
-                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs">
-                          {subject.grade}
-                        </Badge>
-                      </div>
-                      <p className="text-base font-medium text-foreground mb-1">
-                        {subject.name}
-                      </p>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <User className="h-3.5 w-3.5" />
-                        <span>{subject.instructor}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Schedule Info */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" />
-                      <span>{subject.schedule[0].day}</span>
-                      <Clock className="h-3.5 w-3.5 ml-2" />
-                      <span className="truncate">
-                        {subject.schedule[0].time}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="h-3.5 w-3.5" />
-                      <span className="truncate">
-                        {subject.schedule[0].room}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <p className="text-3xl font-bold text-slate-900">{classes.length}</p>
+              <p className="text-xs text-slate-500 mt-1">Enrolled</p>
             </CardContent>
           </Card>
-        ))}
+
+          <Card className="border-2">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-slate-600">Total Units</p>
+                <GraduationCap className="h-4 w-4 text-violet-600" />
+              </div>
+              <p className="text-3xl font-bold text-slate-900">{totalUnits}</p>
+              <p className="text-xs text-slate-500 mt-1">This semester</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-slate-600">Completed</p>
+                <Award className="h-4 w-4 text-emerald-600" />
+              </div>
+              <p className="text-3xl font-bold text-slate-900">{completedClasses}</p>
+              <p className="text-xs text-slate-500 mt-1">Finalized</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-slate-600">Average</p>
+                <TrendingUp className="h-4 w-4 text-amber-600" />
+              </div>
+              <p className={`text-3xl font-bold ${getGradeColor(averageGrade)}`}>
+                {averageGrade ? averageGrade.toFixed(2) : "-"}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">Current GWA</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filter Tabs */}
+        <Tabs defaultValue="current" onValueChange={(v) => setFilter(v as "current" | "all")}>
+          <TabsList>
+            <TabsTrigger value="current">Current Semester</TabsTrigger>
+            <TabsTrigger value="all">All Classes</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="current" className="space-y-4 mt-6">
+            {classes.length === 0 ? (
+              <Alert className="border-2">
+                <AlertCircle className="h-5 w-5" />
+                <AlertTitle className="text-lg">No Classes Found</AlertTitle>
+                <AlertDescription className="text-base mt-2">
+                  {semester && schoolYear ? (
+                    <>
+                      You don't have any classes for <strong>School Year {schoolYear}, Semester {semester}</strong>.
+                      <br />
+                      <span className="text-sm text-slate-600 mt-2 block">
+                        If you are enrolled but don't see your classes, please contact the registrar's office.
+                      </span>
+                    </>
+                  ) : (
+                    "Academic period information is not available. Please try again later."
+                  )}
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {classes.map((classData) => (
+                  <Card
+                    key={classData.enrollmentId}
+                    className="border-2 hover:shadow-lg transition-all group cursor-pointer"
+                    onClick={() => setSelectedClass(classData)}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <Badge variant="outline" className="mb-2">
+                            {classData.subjectCode}
+                          </Badge>
+                          <h3 className="font-bold text-lg text-slate-900 group-hover:text-blue-600 transition-colors">
+                            {classData.subjectName}
+                          </h3>
+                          {classData.section && (
+                            <p className="text-sm text-slate-600 mt-1">
+                              Section: {classData.section}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          {calculateCurrentGrade(classData) ? (
+                            <>
+                              <Badge className={getGradeBadgeColor(calculateCurrentGrade(classData))}>
+                                {calculateCurrentGrade(classData)?.toFixed(2)}
+                              </Badge>
+                              <p className="text-xs text-slate-500 mt-1">
+                                {getGradeLabel(calculateCurrentGrade(classData))}
+                              </p>
+                            </>
+                          ) : (
+                            <Badge variant="outline" className="text-xs">
+                              In Progress
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {/* Units */}
+                      <div className="flex items-center gap-2 text-sm">
+                        <GraduationCap className="h-4 w-4 text-slate-500" />
+                        <span className="text-slate-700">
+                          {classData.units} {classData.units === 1 ? "Unit" : "Units"}
+                          {classData.lecture && classData.laboratory && (
+                            <span className="text-slate-500 ml-1">
+                              ({classData.lecture}L + {classData.laboratory}Lab)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+
+                      {/* Room */}
+                      {classData.room && (
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                          <MapPin className="h-4 w-4" />
+                          <span>{classData.room}</span>
+                        </div>
+                      )}
+
+                      {/* Grades Progress */}
+                      <div className="pt-2 border-t">
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Prelim</p>
+                            <p className={`font-semibold ${getGradeColor(classData.prelimGrade)}`}>
+                              {classData.prelimGrade ? classData.prelimGrade.toFixed(2) : "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Midterm</p>
+                            <p className={`font-semibold ${getGradeColor(classData.midtermGrade)}`}>
+                              {classData.midtermGrade ? classData.midtermGrade.toFixed(2) : "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Finals</p>
+                            <p className={`font-semibold ${getGradeColor(classData.finalsGrade)}`}>
+                              {classData.finalsGrade ? classData.finalsGrade.toFixed(2) : "-"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Status Indicator */}
+                      {classData.isGradesFinalized && (
+                        <div className="pt-2 flex items-center gap-2 text-sm text-emerald-600">
+                          <Award className="h-4 w-4" />
+                          <span className="font-medium">Grades Finalized</span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="all" className="space-y-4 mt-6">
+            {classes.length === 0 ? (
+              <Alert className="border-2">
+                <AlertCircle className="h-5 w-5" />
+                <AlertTitle className="text-lg">No Classes Found</AlertTitle>
+                <AlertDescription className="text-base mt-2">
+                  You don't have any enrolled classes in your academic history.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {classes.map((classData) => (
+                  <Card
+                    key={classData.enrollmentId}
+                    className="border-2 hover:shadow-lg transition-all group cursor-pointer"
+                    onClick={() => setSelectedClass(classData)}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline">{classData.subjectCode}</Badge>
+                            <Badge variant="secondary" className="text-xs">
+                              SY {classData.schoolYear} - S{classData.semester}
+                            </Badge>
+                          </div>
+                          <h3 className="font-bold text-lg text-slate-900 group-hover:text-blue-600 transition-colors">
+                            {classData.subjectName}
+                          </h3>
+                          {classData.section && (
+                            <p className="text-sm text-slate-600 mt-1">
+                              Section: {classData.section}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          {calculateCurrentGrade(classData) ? (
+                            <>
+                              <Badge className={getGradeBadgeColor(calculateCurrentGrade(classData))}>
+                                {calculateCurrentGrade(classData)?.toFixed(2)}
+                              </Badge>
+                              <p className="text-xs text-slate-500 mt-1">
+                                {getGradeLabel(calculateCurrentGrade(classData))}
+                              </p>
+                            </>
+                          ) : (
+                            <Badge variant="outline" className="text-xs">
+                              In Progress
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        <GraduationCap className="h-4 w-4 text-slate-500" />
+                        <span className="text-slate-700">
+                          {classData.units} {classData.units === 1 ? "Unit" : "Units"}
+                        </span>
+                      </div>
+
+                      <div className="pt-2 border-t">
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Prelim</p>
+                            <p className={`font-semibold ${getGradeColor(classData.prelimGrade)}`}>
+                              {classData.prelimGrade ? classData.prelimGrade.toFixed(2) : "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Midterm</p>
+                            <p className={`font-semibold ${getGradeColor(classData.midtermGrade)}`}>
+                              {classData.midtermGrade ? classData.midtermGrade.toFixed(2) : "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Finals</p>
+                            <p className={`font-semibold ${getGradeColor(classData.finalsGrade)}`}>
+                              {classData.finalsGrade ? classData.finalsGrade.toFixed(2) : "-"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {classData.isGradesFinalized && (
+                        <div className="pt-2 flex items-center gap-2 text-sm text-emerald-600">
+                          <Award className="h-4 w-4" />
+                          <span className="font-medium">Grades Finalized</span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
-
-      {filteredSubjects.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No subjects found</h3>
-            <p className="text-muted-foreground text-center">
-              Try adjusting your filters or search query
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Subject Detail Modal */}
-      <SubjectDetailModal
-        subject={selectedSubject}
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-      />
     </div>
   );
 }

@@ -1,9 +1,5 @@
-import { StudentDashboard } from "../_components/student-dashboard";
+import { StudentDashboardWrapper } from "../_components/student-dashboard-wrapper";
 import { auth, clerkClient } from "@clerk/nextjs/server";
-import {
-  getStudentEnrollmentStatus,
-  getCurrentAcademicSettings,
-} from "@/lib/enrollment";
 import { redirect } from "next/navigation";
 
 export default async function StudentDashboardPage() {
@@ -29,23 +25,8 @@ export default async function StudentDashboardPage() {
     redirect("/onboarding");
   }
 
-  // Get current academic settings
-  const { semester, curriculumYear, schoolYear } =
-    await getCurrentAcademicSettings();
+  // Get user's full name or first name
+  const userName = user.firstName || user.fullName || "Student";
 
-  // Get student enrollment status
-  const enrollmentStatus = await getStudentEnrollmentStatus(
-    studentId,
-    semester,
-    curriculumYear,
-  );
-
-  return (
-    <StudentDashboard
-      enrollmentStatus={enrollmentStatus}
-      currentSemester={semester}
-      currentCurriculumYear={curriculumYear}
-      schoolYear={schoolYear}
-    />
-  );
+  return <StudentDashboardWrapper studentId={studentId} userName={userName} />;
 }
