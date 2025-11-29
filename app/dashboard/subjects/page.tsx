@@ -3,23 +3,34 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   BookOpen,
   GraduationCap,
   TrendingUp,
   Award,
   AlertCircle,
-  Calendar,
-  Clock,
-  MapPin,
-  FileText,
+  ChevronDown,
+  ChevronRight,
   Users,
+  MapPin,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useAuth } from "@clerk/nextjs";
-import { useSemester } from "@/contexts/semester-context";
+import { useUser } from "@clerk/nextjs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useSemester } from "@/contexts/semester-context";
 
 interface ClassData {
   enrollmentId: string;
@@ -48,25 +59,29 @@ interface ClassData {
   completionDate: string | null;
 }
 
+interface GroupedClasses {
+  [key: string]: ClassData[];
+}
+
 export default function MyClassesPage() {
-  const { sessionClaims } = useAuth();
+  const { user, isLoaded } = useUser();
   const { semester, schoolYear } = useSemester();
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedClass, setSelectedClass] = useState<ClassData | null>(null);
-  const [filter, setFilter] = useState<"current" | "all">("current");
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
-  const studentId = (sessionClaims?.metadata as { studentId?: string })
-    ?.studentId;
+  const studentId = user?.publicMetadata?.studentId as string | undefined;
 
   useEffect(() => {
     async function fetchClasses() {
-      console.log("🔍 My Classes Page - Starting fetch with:", {
+      console.log(
+        "🔍 My Classes Page - Starting fetch with studentId:",
         studentId,
+        "semester:",
         semester,
+        "schoolYear:",
         schoolYear,
-        filter,
-      });
+      );
 
       if (!studentId) {
         console.warn("⚠️ No student ID available");
@@ -76,16 +91,8 @@ export default function MyClassesPage() {
 
       setIsLoading(true);
       try {
-        const params = new URLSearchParams({ studentId });
-
-        // Apply filter
-        if (filter === "current" && semester && schoolYear) {
-          params.append("semester", semester);
-          params.append("schoolYear", schoolYear);
-          console.log("🔍 Filtering by current semester:", { semester, schoolYear });
-        }
-
-        const url = `/api/student/subjects?${params.toString()}`;
+        // Fetch classes for current semester and school year
+        const url = `/api/student/subjects?studentId=${studentId}&semester=${semester}&schoolYear=${schoolYear}`;
         console.log("📡 Fetching from:", url);
 
         const response = await fetch(url);
@@ -97,8 +104,18 @@ export default function MyClassesPage() {
         if (data.success) {
           console.log("✅ Successfully fetched classes:", data.subjects.length);
           setClasses(data.subjects);
+
+          // Auto-expand the first section
+          if (data.subjects.length > 0) {
+            const firstKey = `${data.subjects[0].schoolYear}-${data.subjects[0].semester}`;
+            setOpenSections({ [firstKey]: true });
+          }
         } else {
-          console.error("❌ Failed to fetch classes:", data.error, data.details);
+          console.error(
+            "❌ Failed to fetch classes:",
+            data.error,
+            data.details,
+          );
         }
       } catch (error) {
         console.error("💥 Error fetching classes:", error);
@@ -108,7 +125,7 @@ export default function MyClassesPage() {
     }
 
     fetchClasses();
-  }, [studentId, semester, schoolYear, filter]);
+  }, [studentId, semester, schoolYear]);
 
   const getGradeColor = (grade: number | null) => {
     if (!grade) return "text-slate-400";
@@ -121,20 +138,12 @@ export default function MyClassesPage() {
 
   const getGradeBadgeColor = (grade: number | null) => {
     if (!grade) return "bg-slate-100 text-slate-600 border-slate-300";
-    if (grade <= 1.5) return "bg-emerald-100 text-emerald-800 border-emerald-300";
+    if (grade <= 1.5)
+      return "bg-emerald-100 text-emerald-800 border-emerald-300";
     if (grade <= 2.0) return "bg-blue-100 text-blue-800 border-blue-300";
     if (grade <= 2.5) return "bg-amber-100 text-amber-800 border-amber-300";
     if (grade <= 3.0) return "bg-orange-100 text-orange-800 border-orange-300";
     return "bg-red-100 text-red-800 border-red-300";
-  };
-
-  const getGradeLabel = (grade: number | null) => {
-    if (!grade) return "No Grade";
-    if (grade <= 1.5) return "Excellent";
-    if (grade <= 2.0) return "Very Good";
-    if (grade <= 2.5) return "Good";
-    if (grade <= 3.0) return "Passing";
-    return "Failed";
   };
 
   const calculateCurrentGrade = (classData: ClassData) => {
@@ -145,6 +154,29 @@ export default function MyClassesPage() {
     return null;
   };
 
+  // Group classes by school year and semester
+  const groupedClasses: GroupedClasses = classes.reduce((acc, classData) => {
+    const key = `${classData.schoolYear || "Unknown"} - Semester ${classData.semester || "?"}`;
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(classData);
+    return acc;
+  }, {} as GroupedClasses);
+
+  // Sort groups by year and semester (most recent first)
+  const sortedGroups = Object.entries(groupedClasses).sort((a, b) => {
+    const [yearA, semA] = [a[1][0]?.schoolYear || "", a[1][0]?.semester || "0"];
+    const [yearB, semB] = [b[1][0]?.schoolYear || "", b[1][0]?.semester || "0"];
+
+    // Compare years first
+    if (yearA !== yearB) {
+      return yearB.localeCompare(yearA); // Descending order
+    }
+    // Then compare semesters
+    return parseInt(semB) - parseInt(semA); // Descending order
+  });
+
   const totalUnits = classes.reduce((sum, c) => sum + (c.units || 0), 0);
   const completedClasses = classes.filter((c) => c.isGradesFinalized).length;
   const averageGrade =
@@ -152,6 +184,13 @@ export default function MyClassesPage() {
       ? classes.reduce((sum, c) => sum + (c.totalAverage || 0), 0) /
         classes.filter((c) => c.totalAverage).length
       : null;
+
+  const toggleSection = (key: string) => {
+    setOpenSections((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
 
   if (isLoading) {
     return (
@@ -173,7 +212,7 @@ export default function MyClassesPage() {
             My Classes
           </h1>
           <p className="text-slate-600">
-            View your enrolled classes and track your academic progress
+            View all your enrolled classes across all semesters
           </p>
         </div>
 
@@ -185,8 +224,10 @@ export default function MyClassesPage() {
                 <p className="text-sm text-slate-600">Total Classes</p>
                 <Users className="h-4 w-4 text-blue-600" />
               </div>
-              <p className="text-3xl font-bold text-slate-900">{classes.length}</p>
-              <p className="text-xs text-slate-500 mt-1">Enrolled</p>
+              <p className="text-3xl font-bold text-slate-900">
+                {classes.length}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">All time</p>
             </CardContent>
           </Card>
 
@@ -197,7 +238,7 @@ export default function MyClassesPage() {
                 <GraduationCap className="h-4 w-4 text-violet-600" />
               </div>
               <p className="text-3xl font-bold text-slate-900">{totalUnits}</p>
-              <p className="text-xs text-slate-500 mt-1">This semester</p>
+              <p className="text-xs text-slate-500 mt-1">Enrolled</p>
             </CardContent>
           </Card>
 
@@ -207,7 +248,9 @@ export default function MyClassesPage() {
                 <p className="text-sm text-slate-600">Completed</p>
                 <Award className="h-4 w-4 text-emerald-600" />
               </div>
-              <p className="text-3xl font-bold text-slate-900">{completedClasses}</p>
+              <p className="text-3xl font-bold text-slate-900">
+                {completedClasses}
+              </p>
               <p className="text-xs text-slate-500 mt-1">Finalized</p>
             </CardContent>
           </Card>
@@ -218,238 +261,238 @@ export default function MyClassesPage() {
                 <p className="text-sm text-slate-600">Average</p>
                 <TrendingUp className="h-4 w-4 text-amber-600" />
               </div>
-              <p className={`text-3xl font-bold ${getGradeColor(averageGrade)}`}>
+              <p
+                className={`text-3xl font-bold ${getGradeColor(averageGrade)}`}
+              >
                 {averageGrade ? averageGrade.toFixed(2) : "-"}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Current GWA</p>
+              <p className="text-xs text-slate-500 mt-1">Overall GWA</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Filter Tabs */}
-        <Tabs defaultValue="current" onValueChange={(v) => setFilter(v as "current" | "all")}>
-          <TabsList>
-            <TabsTrigger value="current">Current Semester</TabsTrigger>
-            <TabsTrigger value="all">All Classes</TabsTrigger>
-          </TabsList>
+        {/* Classes List - Collapsible by Semester */}
+        {classes.length === 0 ? (
+          <Alert className="border-2">
+            <AlertCircle className="h-5 w-5" />
+            <AlertTitle className="text-lg">No Classes Found</AlertTitle>
+            <AlertDescription className="text-base mt-2">
+              You don't have any enrolled classes in your academic history.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <div className="space-y-4">
+            {sortedGroups.map(([groupKey, groupClasses]) => {
+              const isOpen =
+                openSections[
+                  `${groupClasses[0]?.schoolYear}-${groupClasses[0]?.semester}`
+                ];
+              const groupUnits = groupClasses.reduce(
+                (sum, c) => sum + (c.units || 0),
+                0,
+              );
+              const groupAverage =
+                groupClasses.filter((c) => c.totalAverage).length > 0
+                  ? groupClasses.reduce(
+                      (sum, c) => sum + (c.totalAverage || 0),
+                      0,
+                    ) / groupClasses.filter((c) => c.totalAverage).length
+                  : null;
 
-          <TabsContent value="current" className="space-y-4 mt-6">
-            {classes.length === 0 ? (
-              <Alert className="border-2">
-                <AlertCircle className="h-5 w-5" />
-                <AlertTitle className="text-lg">No Classes Found</AlertTitle>
-                <AlertDescription className="text-base mt-2">
-                  {semester && schoolYear ? (
-                    <>
-                      You don't have any classes for <strong>School Year {schoolYear}, Semester {semester}</strong>.
-                      <br />
-                      <span className="text-sm text-slate-600 mt-2 block">
-                        If you are enrolled but don't see your classes, please contact the registrar's office.
-                      </span>
-                    </>
-                  ) : (
-                    "Academic period information is not available. Please try again later."
-                  )}
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {classes.map((classData) => (
-                  <Card
-                    key={classData.enrollmentId}
-                    className="border-2 hover:shadow-lg transition-all group cursor-pointer"
-                    onClick={() => setSelectedClass(classData)}
+              return (
+                <Card key={groupKey} className="border-2">
+                  <Collapsible
+                    open={isOpen}
+                    onOpenChange={() =>
+                      toggleSection(
+                        `${groupClasses[0]?.schoolYear}-${groupClasses[0]?.semester}`,
+                      )
+                    }
                   >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <Badge variant="outline" className="mb-2">
-                            {classData.subjectCode}
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            {isOpen ? (
+                              <ChevronDown className="h-5 w-5 text-slate-600" />
+                            ) : (
+                              <ChevronRight className="h-5 w-5 text-slate-600" />
+                            )}
+                            <div>
+                              <CardTitle className="flex items-center gap-2 text-xl">
+                                <BookOpen className="h-5 w-5 text-blue-600" />
+                                {groupKey}
+                              </CardTitle>
+                              <p className="text-sm text-slate-600 mt-1">
+                                {groupClasses.length} classes • {groupUnits}{" "}
+                                units
+                                {groupAverage && (
+                                  <span
+                                    className={`ml-2 font-semibold ${getGradeColor(groupAverage)}`}
+                                  >
+                                    • GWA: {groupAverage.toFixed(2)}
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="text-xs">
+                            {
+                              groupClasses.filter((c) => c.isGradesFinalized)
+                                .length
+                            }{" "}
+                            Finalized
                           </Badge>
-                          <h3 className="font-bold text-lg text-slate-900 group-hover:text-blue-600 transition-colors">
-                            {classData.subjectName}
-                          </h3>
-                          {classData.section && (
-                            <p className="text-sm text-slate-600 mt-1">
-                              Section: {classData.section}
-                            </p>
-                          )}
                         </div>
-                        <div className="text-right">
-                          {calculateCurrentGrade(classData) ? (
-                            <>
-                              <Badge className={getGradeBadgeColor(calculateCurrentGrade(classData))}>
-                                {calculateCurrentGrade(classData)?.toFixed(2)}
-                              </Badge>
-                              <p className="text-xs text-slate-500 mt-1">
-                                {getGradeLabel(calculateCurrentGrade(classData))}
-                              </p>
-                            </>
-                          ) : (
-                            <Badge variant="outline" className="text-xs">
-                              In Progress
-                            </Badge>
-                          )}
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-[100px]">
+                                  Code
+                                </TableHead>
+                                <TableHead>Class Name</TableHead>
+                                <TableHead className="text-center">
+                                  Section
+                                </TableHead>
+                                <TableHead className="text-center">
+                                  Room
+                                </TableHead>
+                                <TableHead className="text-center">
+                                  Units
+                                </TableHead>
+                                <TableHead className="text-center">
+                                  Prelim
+                                </TableHead>
+                                <TableHead className="text-center">
+                                  Midterm
+                                </TableHead>
+                                <TableHead className="text-center">
+                                  Finals
+                                </TableHead>
+                                <TableHead className="text-center">
+                                  Grade
+                                </TableHead>
+                                <TableHead className="text-center">
+                                  Status
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {groupClasses.map((classData) => (
+                                <TableRow key={classData.enrollmentId}>
+                                  <TableCell className="font-mono font-semibold">
+                                    {classData.subjectCode}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="font-medium">
+                                      {classData.subjectName}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {classData.section || "-"}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <div className="flex items-center justify-center gap-1 text-sm">
+                                      {classData.room ? (
+                                        <>
+                                          <MapPin className="h-3 w-3 text-slate-400" />
+                                          {classData.room}
+                                        </>
+                                      ) : (
+                                        "-"
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className="font-semibold">
+                                      {classData.units || "-"}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {classData.prelimGrade ? (
+                                      <span
+                                        className={`font-semibold ${getGradeColor(classData.prelimGrade)}`}
+                                      >
+                                        {classData.prelimGrade.toFixed(2)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400">-</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {classData.midtermGrade ? (
+                                      <span
+                                        className={`font-semibold ${getGradeColor(classData.midtermGrade)}`}
+                                      >
+                                        {classData.midtermGrade.toFixed(2)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400">-</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {classData.finalsGrade ? (
+                                      <span
+                                        className={`font-semibold ${getGradeColor(classData.finalsGrade)}`}
+                                      >
+                                        {classData.finalsGrade.toFixed(2)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400">-</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {calculateCurrentGrade(classData) ? (
+                                      <Badge
+                                        className={getGradeBadgeColor(
+                                          calculateCurrentGrade(classData),
+                                        )}
+                                      >
+                                        {calculateCurrentGrade(
+                                          classData,
+                                        )?.toFixed(2)}
+                                      </Badge>
+                                    ) : (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs"
+                                      >
+                                        In Progress
+                                      </Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {classData.isGradesFinalized ? (
+                                      <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-xs">
+                                        Finalized
+                                      </Badge>
+                                    ) : (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs"
+                                      >
+                                        Ongoing
+                                      </Badge>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {/* Units */}
-                      <div className="flex items-center gap-2 text-sm">
-                        <GraduationCap className="h-4 w-4 text-slate-500" />
-                        <span className="text-slate-700">
-                          {classData.units} {classData.units === 1 ? "Unit" : "Units"}
-                          {classData.lecture && classData.laboratory && (
-                            <span className="text-slate-500 ml-1">
-                              ({classData.lecture}L + {classData.laboratory}Lab)
-                            </span>
-                          )}
-                        </span>
-                      </div>
-
-                      {/* Room */}
-                      {classData.room && (
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <MapPin className="h-4 w-4" />
-                          <span>{classData.room}</span>
-                        </div>
-                      )}
-
-                      {/* Grades Progress */}
-                      <div className="pt-2 border-t">
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">Prelim</p>
-                            <p className={`font-semibold ${getGradeColor(classData.prelimGrade)}`}>
-                              {classData.prelimGrade ? classData.prelimGrade.toFixed(2) : "-"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">Midterm</p>
-                            <p className={`font-semibold ${getGradeColor(classData.midtermGrade)}`}>
-                              {classData.midtermGrade ? classData.midtermGrade.toFixed(2) : "-"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">Finals</p>
-                            <p className={`font-semibold ${getGradeColor(classData.finalsGrade)}`}>
-                              {classData.finalsGrade ? classData.finalsGrade.toFixed(2) : "-"}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Status Indicator */}
-                      {classData.isGradesFinalized && (
-                        <div className="pt-2 flex items-center gap-2 text-sm text-emerald-600">
-                          <Award className="h-4 w-4" />
-                          <span className="font-medium">Grades Finalized</span>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="all" className="space-y-4 mt-6">
-            {classes.length === 0 ? (
-              <Alert className="border-2">
-                <AlertCircle className="h-5 w-5" />
-                <AlertTitle className="text-lg">No Classes Found</AlertTitle>
-                <AlertDescription className="text-base mt-2">
-                  You don't have any enrolled classes in your academic history.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {classes.map((classData) => (
-                  <Card
-                    key={classData.enrollmentId}
-                    className="border-2 hover:shadow-lg transition-all group cursor-pointer"
-                    onClick={() => setSelectedClass(classData)}
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge variant="outline">{classData.subjectCode}</Badge>
-                            <Badge variant="secondary" className="text-xs">
-                              SY {classData.schoolYear} - S{classData.semester}
-                            </Badge>
-                          </div>
-                          <h3 className="font-bold text-lg text-slate-900 group-hover:text-blue-600 transition-colors">
-                            {classData.subjectName}
-                          </h3>
-                          {classData.section && (
-                            <p className="text-sm text-slate-600 mt-1">
-                              Section: {classData.section}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          {calculateCurrentGrade(classData) ? (
-                            <>
-                              <Badge className={getGradeBadgeColor(calculateCurrentGrade(classData))}>
-                                {calculateCurrentGrade(classData)?.toFixed(2)}
-                              </Badge>
-                              <p className="text-xs text-slate-500 mt-1">
-                                {getGradeLabel(calculateCurrentGrade(classData))}
-                              </p>
-                            </>
-                          ) : (
-                            <Badge variant="outline" className="text-xs">
-                              In Progress
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm">
-                        <GraduationCap className="h-4 w-4 text-slate-500" />
-                        <span className="text-slate-700">
-                          {classData.units} {classData.units === 1 ? "Unit" : "Units"}
-                        </span>
-                      </div>
-
-                      <div className="pt-2 border-t">
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">Prelim</p>
-                            <p className={`font-semibold ${getGradeColor(classData.prelimGrade)}`}>
-                              {classData.prelimGrade ? classData.prelimGrade.toFixed(2) : "-"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">Midterm</p>
-                            <p className={`font-semibold ${getGradeColor(classData.midtermGrade)}`}>
-                              {classData.midtermGrade ? classData.midtermGrade.toFixed(2) : "-"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">Finals</p>
-                            <p className={`font-semibold ${getGradeColor(classData.finalsGrade)}`}>
-                              {classData.finalsGrade ? classData.finalsGrade.toFixed(2) : "-"}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {classData.isGradesFinalized && (
-                        <div className="pt-2 flex items-center gap-2 text-sm text-emerald-600">
-                          <Award className="h-4 w-4" />
-                          <span className="font-medium">Grades Finalized</span>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

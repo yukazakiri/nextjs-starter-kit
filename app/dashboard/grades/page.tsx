@@ -1,15 +1,9 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -19,506 +13,443 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  AlertCircle,
   CheckCircle2,
   Clock,
-  TrendingDown,
+  Circle,
   TrendingUp,
-  XCircle,
+  Award,
+  BookOpen,
+  Target,
+  GraduationCap,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useAuth } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-interface GradeData {
-  id: number;
-  subjectCode: string;
-  subjectName: string;
-  instructor: string;
-  credits: number;
-  semester: string;
-  year: string;
-  prelim?: number;
-  midterm?: number;
-  finals?: number;
-  finalGrade?: number;
-  letterGrade?: string;
-  status: "complete" | "in-progress" | "no-grades" | "failed" | "passed";
-  remarks?: string;
+interface ChecklistItem {
+  subjectId: string;
+  code: string;
+  title: string;
+  description: string | null;
+  units: number | null;
+  lecture: number | null;
+  laboratory: number | null;
+  prerequisite: string | null;
+  academicYear: number | null;
+  semester: number | null;
+  group: string | null;
+  classification: string;
+  status: "not-started" | "ongoing" | "finished";
+  grade: number | null;
+  enrollmentId: string | null;
+  instructor: string | null;
+  section: string | null;
+  remarks: string | null;
+  schoolYear: string | null;
+  enrolledSemester: number | null;
+  isCredited: boolean;
 }
 
-const gradesData: GradeData[] = [
-  {
-    id: 1,
-    subjectCode: "CS 401",
-    subjectName: "Advanced Web Development",
-    instructor: "Dr. Sarah Smith",
-    credits: 3,
-    semester: "1st Semester",
-    year: "2024-2025",
-    prelim: 92,
-    midterm: 88,
-    finals: 90,
-    finalGrade: 90,
-    letterGrade: "A",
-    status: "complete",
-    remarks: "Excellent performance throughout the semester",
-  },
-  {
-    id: 2,
-    subjectCode: "CS 305",
-    subjectName: "Database Systems",
-    instructor: "Prof. Michael Johnson",
-    credits: 4,
-    semester: "1st Semester",
-    year: "2024-2025",
-    prelim: 85,
-    midterm: 87,
-    finals: 89,
-    finalGrade: 87,
-    letterGrade: "A-",
-    status: "complete",
-    remarks: "Strong understanding of database concepts",
-  },
-  {
-    id: 3,
-    subjectCode: "CS 450",
-    subjectName: "Machine Learning",
-    instructor: "Dr. Emily Williams",
-    credits: 3,
-    semester: "1st Semester",
-    year: "2024-2025",
-    prelim: 78,
-    midterm: 82,
-    finals: 85,
-    finalGrade: 82,
-    letterGrade: "B+",
-    status: "complete",
-    remarks: "Good progress in understanding ML algorithms",
-  },
-  {
-    id: 4,
-    subjectCode: "CS 320",
-    subjectName: "Software Engineering",
-    instructor: "Prof. David Brown",
-    credits: 3,
-    semester: "1st Semester",
-    year: "2024-2025",
-    prelim: 95,
-    midterm: 93,
-    finals: undefined,
-    finalGrade: undefined,
-    letterGrade: undefined,
-    status: "in-progress",
-    remarks: "Finals examination pending",
-  },
-  {
-    id: 5,
-    subjectCode: "MATH 301",
-    subjectName: "Linear Algebra",
-    instructor: "Dr. Jennifer Lee",
-    credits: 3,
-    semester: "1st Semester",
-    year: "2024-2025",
-    prelim: undefined,
-    midterm: undefined,
-    finals: undefined,
-    finalGrade: undefined,
-    letterGrade: undefined,
-    status: "no-grades",
-    remarks: "Grades not yet uploaded by instructor",
-  },
-  {
-    id: 6,
-    subjectCode: "CS 250",
-    subjectName: "Algorithms",
-    instructor: "Prof. James Wilson",
-    credits: 3,
-    semester: "1st Semester",
-    year: "2024-2025",
-    prelim: 65,
-    midterm: 68,
-    finals: 70,
-    finalGrade: 68,
-    letterGrade: "D",
-    status: "failed",
-    remarks: "Below passing grade - Needs improvement",
-  },
-  {
-    id: 7,
-    subjectCode: "CS 201",
-    subjectName: "Data Structures",
-    instructor: "Prof. Robert Chen",
-    credits: 4,
-    semester: "2nd Semester",
-    year: "2023-2024",
-    prelim: 88,
-    midterm: 90,
-    finals: 92,
-    finalGrade: 90,
-    letterGrade: "A",
-    status: "complete",
-    remarks: "Excellent grasp of data structures",
-  },
-];
+interface Statistics {
+  totalSubjects: number;
+  finishedSubjects: number;
+  ongoingSubjects: number;
+  notStartedSubjects: number;
+  gwa: number | null;
+  earnedUnits: number;
+  totalUnits: number;
+  completionPercentage: number;
+}
 
-export default function GradesPage() {
-  const router = useRouter();
-  const { sessionClaims, isLoaded } = useAuth();
-  const [semesterFilter, setSemesterFilter] = useState("1st Semester");
-  const [yearFilter, setYearFilter] = useState("2024-2025");
+export default function MyChecklistPage() {
+  const { user, isLoaded } = useUser();
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+  const [statistics, setStatistics] = useState<Statistics | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState<
+    "all" | "not-started" | "ongoing" | "finished"
+  >("all");
+  const [filterYear, setFilterYear] = useState<number | "all">("all");
 
-  // Redirect faculty users to their grades page
+  const studentId = user?.publicMetadata?.studentId as string | undefined;
+
   useEffect(() => {
-    if (isLoaded) {
-      const userRole = (sessionClaims?.metadata as { role?: string })?.role;
-      if (userRole === "faculty") {
-        router.push("/dashboard/faculty/grades");
+    async function fetchChecklist() {
+      console.log("🔍 Checklist Page - Fetching for student:", studentId);
+
+      if (!studentId) {
+        console.warn("⚠️ No student ID available");
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const url = `/api/student/checklist?studentId=${studentId}`;
+        console.log("📡 Fetching from:", url);
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        console.log("📦 Response data:", data);
+
+        if (data.success) {
+          console.log(
+            "✅ Successfully fetched checklist:",
+            data.checklist.length,
+          );
+          setChecklist(data.checklist);
+          setStatistics(data.statistics);
+        } else {
+          console.error("❌ Failed to fetch checklist:", data.error);
+        }
+      } catch (error) {
+        console.error("💥 Error fetching checklist:", error);
+      } finally {
+        setIsLoading(false);
       }
     }
-  }, [isLoaded, sessionClaims, router]);
 
-  // Filter grades based on selected semester and year
-  const filteredGrades = gradesData.filter((grade) => {
-    const matchesSemester =
-      semesterFilter === "all" || grade.semester === semesterFilter;
-    const matchesYear = yearFilter === "all" || grade.year === yearFilter;
-    return matchesSemester && matchesYear;
-  });
+    fetchChecklist();
+  }, [studentId]);
 
-  const completedSubjects = filteredGrades.filter(
-    (g) => g.status === "complete",
-  );
-  const totalCredits = filteredGrades.reduce((sum, g) => sum + g.credits, 0);
-  const earnedCredits = completedSubjects.reduce(
-    (sum, g) => sum + g.credits,
-    0,
-  );
-
-  // Calculate GPA (only for completed subjects)
-  const gpaSubjects = completedSubjects.filter(
-    (g) => g.finalGrade && g.finalGrade >= 75,
-  );
-  const gpa =
-    gpaSubjects.length > 0
-      ? (
-          gpaSubjects.reduce((sum, g) => {
-            const grade = g.finalGrade || 0;
-            if (grade >= 90) return sum + 4.0;
-            if (grade >= 85) return sum + 3.5;
-            if (grade >= 80) return sum + 3.0;
-            if (grade >= 75) return sum + 2.5;
-            return sum + 2.0;
-          }, 0) / gpaSubjects.length
-        ).toFixed(2)
-      : "N/A";
-
-  const getStatusBadge = (status: GradeData["status"]) => {
+  const getStatusBadge = (status: ChecklistItem["status"]) => {
     switch (status) {
-      case "complete":
+      case "finished":
         return (
-          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300">
             <CheckCircle2 className="h-3 w-3 mr-1" />
-            Complete
+            Finished
           </Badge>
         );
-      case "in-progress":
+      case "ongoing":
         return (
-          <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+          <Badge className="bg-blue-100 text-blue-800 border-blue-300">
             <Clock className="h-3 w-3 mr-1" />
-            In Progress
+            Ongoing
           </Badge>
         );
-      case "no-grades":
+      case "not-started":
         return (
-          <Badge variant="secondary">
-            <AlertCircle className="h-3 w-3 mr-1" />
-            No Grades
-          </Badge>
-        );
-      case "failed":
-        return (
-          <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
-            <XCircle className="h-3 w-3 mr-1" />
-            Failed
-          </Badge>
-        );
-      case "passed":
-        return (
-          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-            <CheckCircle2 className="h-3 w-3 mr-1" />
-            Passed
+          <Badge variant="outline" className="text-slate-600">
+            <Circle className="h-3 w-3 mr-1" />
+            Not Started
           </Badge>
         );
     }
   };
 
-  const getGradeColor = (grade?: number) => {
-    if (!grade) return "text-muted-foreground";
-    if (grade >= 90) return "text-green-600 dark:text-green-400";
-    if (grade >= 85) return "text-blue-600 dark:text-blue-400";
-    if (grade >= 80) return "text-yellow-600 dark:text-yellow-400";
-    if (grade >= 75) return "text-orange-600 dark:text-orange-400";
-    return "text-red-600 dark:text-red-400";
+  const getGradeColor = (grade: number | null) => {
+    if (!grade) return "text-slate-400";
+    if (grade <= 1.5) return "text-emerald-600";
+    if (grade <= 2.0) return "text-blue-600";
+    if (grade <= 2.5) return "text-amber-600";
+    if (grade <= 3.0) return "text-orange-600";
+    return "text-red-600";
   };
 
+  // Get unique years for filtering
+  const uniqueYears = Array.from(
+    new Set(
+      checklist
+        .map((item) => item.academicYear)
+        .filter((year) => year !== null),
+    ),
+  ).sort() as number[];
+
+  // Filter checklist
+  const filteredChecklist = checklist.filter((item) => {
+    const matchesStatus =
+      filterStatus === "all" || item.status === filterStatus;
+    const matchesYear =
+      filterYear === "all" || item.academicYear === filterYear;
+    return matchesStatus && matchesYear;
+  });
+
+  // Group by year and semester
+  const groupedChecklist = filteredChecklist.reduce(
+    (acc, item) => {
+      const year = item.academicYear || 0;
+      const semester = item.semester || 0;
+      const key = `Year ${year} - Semester ${semester}`;
+
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(item);
+      return acc;
+    },
+    {} as Record<string, ChecklistItem[]>,
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading your checklist...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!statistics) {
+    return (
+      <div className="p-6">
+        <Alert variant="destructive">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            Failed to load checklist data. Please try again later.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-6 p-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Grades</h1>
-          <p className="text-muted-foreground mt-2">
-            View your academic performance
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
+      <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+        {/* Header */}
+        <div className="space-y-3">
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-900">
+            My Checklist
+          </h1>
+          <p className="text-slate-600">
+            Track your progress through all subjects in your course curriculum
           </p>
         </div>
-        <div className="flex gap-3">
-          <Select value={yearFilter} onValueChange={setYearFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="School Year" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Years</SelectItem>
-              <SelectItem value="2024-2025">2024-2025</SelectItem>
-              <SelectItem value="2023-2024">2023-2024</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={semesterFilter} onValueChange={setSemesterFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Semester" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Semesters</SelectItem>
-              <SelectItem value="1st Semester">1st Semester</SelectItem>
-              <SelectItem value="2nd Semester">2nd Semester</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Current GPA
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{gpa}</div>
-            <p className="text-xs text-muted-foreground mt-1">Out of 4.0</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Credits Earned
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {earnedCredits}/{totalCredits}
-            </div>
-            <Progress
-              value={(earnedCredits / totalCredits) * 100}
-              className="h-2 mt-2"
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Completed
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{completedSubjects.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Out of {filteredGrades.length} subjects
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Status
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-green-600" />
-              <span className="text-lg font-semibold">On Track</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Good academic standing
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+        {/* Summary Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="border-2">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-slate-600">Completion</p>
+                <Target className="h-4 w-4 text-blue-600" />
+              </div>
+              <p className="text-3xl font-bold text-blue-600">
+                {statistics.completionPercentage}%
+              </p>
+              <Progress
+                value={statistics.completionPercentage}
+                className="h-2 mt-2"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                {statistics.finishedSubjects} of {statistics.totalSubjects}
+              </p>
+            </CardContent>
+          </Card>
 
-      {/* Grades Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Subject Grades</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[120px]">Code</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead className="text-center">Prelim</TableHead>
-                  <TableHead className="text-center">Midterm</TableHead>
-                  <TableHead className="text-center">Finals</TableHead>
-                  <TableHead className="text-center">Final Grade</TableHead>
-                  <TableHead className="text-center">Letter</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredGrades.map((grade) => (
-                  <TableRow key={grade.id}>
-                    <TableCell className="font-medium">
-                      {grade.subjectCode}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{grade.subjectName}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {grade.instructor} • {grade.credits} Credits
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {grade.prelim ? (
-                        <span
-                          className={`font-semibold ${getGradeColor(grade.prelim)}`}
-                        >
-                          {grade.prelim}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {grade.midterm ? (
-                        <span
-                          className={`font-semibold ${getGradeColor(grade.midterm)}`}
-                        >
-                          {grade.midterm}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {grade.finals ? (
-                        <span
-                          className={`font-semibold ${getGradeColor(grade.finals)}`}
-                        >
-                          {grade.finals}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {grade.finalGrade ? (
-                        <span
-                          className={`font-bold text-lg ${getGradeColor(grade.finalGrade)}`}
-                        >
-                          {grade.finalGrade}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {grade.letterGrade ? (
-                        <Badge variant="outline" className="font-semibold">
-                          {grade.letterGrade}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(grade.status)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+          <Card className="border-2">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-slate-600">Current GWA</p>
+                <TrendingUp className="h-4 w-4 text-emerald-600" />
+              </div>
+              <p className="text-3xl font-bold text-emerald-600">
+                {statistics.gwa ? statistics.gwa.toFixed(2) : "-"}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                {statistics.finishedSubjects} subjects
+              </p>
+            </CardContent>
+          </Card>
 
-      {/* Remarks Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Instructor Remarks</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredGrades
-              .filter((g) => g.remarks)
-              .map((grade) => (
-                <div
-                  key={grade.id}
-                  className="flex items-start gap-3 p-3 border rounded-lg"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold">{grade.subjectCode}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {grade.subjectName}
-                      </span>
-                    </div>
-                    <p className="text-sm">{grade.remarks}</p>
-                  </div>
-                  {grade.status === "failed" && (
-                    <TrendingDown className="h-5 w-5 text-red-500" />
-                  )}
-                  {grade.status === "complete" &&
-                    grade.finalGrade &&
-                    grade.finalGrade >= 85 && (
-                      <TrendingUp className="h-5 w-5 text-green-500" />
-                    )}
+          <Card className="border-2">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-slate-600">Units Earned</p>
+                <GraduationCap className="h-4 w-4 text-violet-600" />
+              </div>
+              <p className="text-3xl font-bold text-slate-900">
+                {statistics.earnedUnits}
+                <span className="text-lg text-slate-400">
+                  /{statistics.totalUnits}
+                </span>
+              </p>
+              <Progress
+                value={(statistics.earnedUnits / statistics.totalUnits) * 100}
+                className="h-2 mt-2"
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="border-2 bg-gradient-to-br from-emerald-50 to-green-50">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-emerald-800">Status</p>
+                <Award className="h-4 w-4 text-emerald-600" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <span className="text-sm text-emerald-800">
+                    {statistics.finishedSubjects} Finished
+                  </span>
                 </div>
-              ))}
-          </div>
-        </CardContent>
-      </Card>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm text-blue-800">
+                    {statistics.ongoingSubjects} Ongoing
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Circle className="h-4 w-4 text-slate-400" />
+                  <span className="text-sm text-slate-600">
+                    {statistics.notStartedSubjects} Not Started
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-      {/* Legend */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Grading Scale</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-            <div>
-              <div className="font-semibold text-green-600">90-100</div>
-              <div className="text-muted-foreground">A (Excellent)</div>
+        {/* Filters */}
+        <Card className="border-2">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={filterStatus === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterStatus("all")}
+              >
+                All Subjects
+              </Button>
+              <Button
+                variant={filterStatus === "finished" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterStatus("finished")}
+                className={
+                  filterStatus === "finished"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : ""
+                }
+              >
+                <CheckCircle2 className="h-4 w-4 mr-1" />
+                Finished
+              </Button>
+              <Button
+                variant={filterStatus === "ongoing" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterStatus("ongoing")}
+                className={
+                  filterStatus === "ongoing"
+                    ? "bg-blue-600 hover:bg-blue-700"
+                    : ""
+                }
+              >
+                <Clock className="h-4 w-4 mr-1" />
+                Ongoing
+              </Button>
+              <Button
+                variant={filterStatus === "not-started" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilterStatus("not-started")}
+              >
+                <Circle className="h-4 w-4 mr-1" />
+                Not Started
+              </Button>
+
+              <div className="ml-auto flex gap-2">
+                <Button
+                  variant={filterYear === "all" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFilterYear("all")}
+                >
+                  All Years
+                </Button>
+                {uniqueYears.map((year) => (
+                  <Button
+                    key={year}
+                    variant={filterYear === year ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFilterYear(year)}
+                  >
+                    Year {year}
+                  </Button>
+                ))}
+              </div>
             </div>
-            <div>
-              <div className="font-semibold text-blue-600">85-89</div>
-              <div className="text-muted-foreground">A- (Very Good)</div>
-            </div>
-            <div>
-              <div className="font-semibold text-yellow-600">80-84</div>
-              <div className="text-muted-foreground">B+ (Good)</div>
-            </div>
-            <div>
-              <div className="font-semibold text-orange-600">75-79</div>
-              <div className="text-muted-foreground">B (Satisfactory)</div>
-            </div>
-            <div>
-              <div className="font-semibold text-red-600">Below 75</div>
-              <div className="text-muted-foreground">Failed</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        {/* Checklist Table - Grouped by Year/Semester */}
+        {Object.entries(groupedChecklist).map(([groupKey, items]) => (
+          <Card key={groupKey} className="border-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-blue-600" />
+                {groupKey}
+                <Badge variant="outline" className="ml-auto">
+                  {items.length} subjects
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[100px]">Code</TableHead>
+                      <TableHead>Subject Title</TableHead>
+                      <TableHead className="text-center">Units</TableHead>
+                      <TableHead className="text-center">Grade</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((item) => (
+                      <TableRow key={item.subjectId}>
+                        <TableCell className="font-mono font-semibold">
+                          {item.code}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{item.title}</div>
+                            {item.prerequisite && (
+                              <div className="text-xs text-slate-500">
+                                Prerequisite: {item.prerequisite}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="font-semibold">
+                            {item.units || "-"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {item.grade ? (
+                            <span
+                              className={`font-bold text-lg ${getGradeColor(item.grade)}`}
+                            >
+                              {item.grade.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {getStatusBadge(item.status)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+
+        {filteredChecklist.length === 0 && (
+          <Alert>
+            <AlertTitle>No subjects found</AlertTitle>
+            <AlertDescription>
+              Try adjusting your filters to see more subjects.
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
     </div>
   );
 }
