@@ -21,121 +21,89 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useAuth } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-
-const students = [
-  {
-    id: 1,
-    studentId: "2024-CS-001",
-    firstName: "John",
-    lastName: "Doe",
-    email: "john.doe@student.edu",
-    phone: "+1 (555) 123-4567",
-    avatar: "",
-    program: "Computer Science",
-    year: "4th Year",
-    enrolledClasses: ["CS 401", "CS 305"],
-    gpa: "3.85",
-    attendance: "92%",
-    status: "Active",
-  },
-  {
-    id: 2,
-    studentId: "2024-CS-002",
-    firstName: "Jane",
-    lastName: "Smith",
-    email: "jane.smith@student.edu",
-    phone: "+1 (555) 234-5678",
-    avatar: "",
-    program: "Computer Science",
-    year: "3rd Year",
-    enrolledClasses: ["CS 305", "CS 201"],
-    gpa: "3.92",
-    attendance: "95%",
-    status: "Active",
-  },
-  {
-    id: 3,
-    studentId: "2024-CS-003",
-    firstName: "Michael",
-    lastName: "Johnson",
-    email: "michael.j@student.edu",
-    phone: "+1 (555) 345-6789",
-    avatar: "",
-    program: "Computer Science",
-    year: "2nd Year",
-    enrolledClasses: ["CS 201", "CS 101"],
-    gpa: "3.67",
-    attendance: "88%",
-    status: "Active",
-  },
-  {
-    id: 4,
-    studentId: "2024-CS-004",
-    firstName: "Emily",
-    lastName: "Williams",
-    email: "emily.w@student.edu",
-    phone: "+1 (555) 456-7890",
-    avatar: "",
-    program: "Computer Science",
-    year: "1st Year",
-    enrolledClasses: ["CS 101"],
-    gpa: "3.95",
-    attendance: "97%",
-    status: "Active",
-  },
-  {
-    id: 5,
-    studentId: "2024-CS-005",
-    firstName: "David",
-    lastName: "Brown",
-    email: "david.brown@student.edu",
-    phone: "+1 (555) 567-8901",
-    avatar: "",
-    program: "Computer Science",
-    year: "4th Year",
-    enrolledClasses: ["CS 401"],
-    gpa: "3.72",
-    attendance: "85%",
-    status: "Active",
-  },
-];
+import { laravelApi, type LaravelStudent } from "@/lib/laravel-api";
 
 export default function FacultyStudentsPage() {
   const router = useRouter();
-  const { sessionClaims, isLoaded } = useAuth();
+  const { user } = useUser();
+  const [students, setStudents] = useState<LaravelStudent[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
 
   // Redirect non-faculty users to student dashboard
   useEffect(() => {
-    if (isLoaded) {
-      const userRole = (sessionClaims?.metadata as { role?: string })?.role;
+    if (user) {
+      const userRole = user.publicMetadata?.role as string;
       if (userRole !== "faculty") {
         router.push("/dashboard/student");
+        return;
       }
+
+      // Fetch students from Laravel API
+      fetchStudents();
     }
-  }, [isLoaded, sessionClaims, router]);
+  }, [user]);
+
+  const fetchStudents = async () => {
+    const facultyId = user?.publicMetadata?.facultyId as string;
+    if (!facultyId) {
+      console.error("No faculty ID found in user metadata");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const facultyData = await laravelApi.getFaculty(facultyId);
+      
+      // Check if facultyData is valid
+      if (!facultyData || !facultyData.data || !Array.isArray(facultyData.data.classes)) {
+        console.error("Faculty data is invalid or classes not found:", facultyData);
+        setStudents([]);
+        return;
+      }
+      
+      // For now, we'll need to get students from each class
+      // TODO: Update this when we have a direct students endpoint
+      const allStudents: LaravelStudent[] = [];
+      
+      for (const classItem of facultyData.data.classes) {
+        const classStudents = await laravelApi.getClassStudents(classItem.id);
+        allStudents.push(...classStudents);
+      }
+      
+      // Remove duplicates (students might be in multiple classes)
+      const uniqueStudents = allStudents.filter((student, index, self) => 
+        index === self.findIndex((s) => s.id === student.id)
+      );
+      
+      setStudents(uniqueStudents);
+    } catch (error) {
+      console.error("Error fetching students from Laravel API:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredStudents = students.filter((student) => {
     const matchesSearch =
-      student.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.email.toLowerCase().includes(searchQuery.toLowerCase());
+      student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.student_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.email?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesClass =
-      classFilter === "all" || student.enrolledClasses.includes(classFilter);
-
-    const matchesYear = yearFilter === "all" || student.year === yearFilter;
+    // TODO: Implement class and year filtering when we have the data
+    const matchesClass = classFilter === "all"; // Placeholder
+    const matchesYear = yearFilter === "all"; // Placeholder
 
     return matchesSearch && matchesClass && matchesYear;
   });
 
   const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+    return `${firstName?.charAt(0)}${lastName?.charAt(0)}`.toUpperCase();
   };
 
   return (
@@ -205,86 +173,89 @@ export default function FacultyStudentsPage() {
       </Card>
 
       {/* Student List */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredStudents.map((student) => (
-          <Card
-            key={student.id}
-            className="cursor-pointer hover:shadow-md transition-all hover:border-primary/50"
-          >
-            <CardContent className="p-6">
-              <div className="flex flex-col gap-4">
-                {/* Student Header */}
-                <div className="flex items-start gap-4">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={student.avatar} />
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {getInitials(student.firstName, student.lastName)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-lg truncate">
-                      {student.firstName} {student.lastName}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {student.studentId}
-                    </p>
-                    <Badge variant="secondary" className="text-xs mt-1">
-                      {student.year}
-                    </Badge>
-                  </div>
-                </div>
-
-                {/* Student Details */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="truncate">{student.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>{student.phone}</span>
-                  </div>
-                </div>
-
-                {/* Performance Stats */}
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <TrendingUp className="h-3.5 w-3.5" />
-                      <span>GPA</span>
-                    </div>
-                    <p className="text-lg font-semibold">{student.gpa}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" />
-                      <span>Attendance</span>
-                    </div>
-                    <p className="text-lg font-semibold">
-                      {student.attendance}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Enrolled Classes */}
-                <div className="pt-3 border-t">
-                  <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
-                    <BookOpen className="h-3.5 w-3.5" />
-                    <span>Enrolled Classes</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {student.enrolledClasses.map((cls, idx) => (
-                      <Badge key={idx} variant="outline" className="text-xs">
-                        {cls}
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Card key={i} className="h-64 animate-pulse bg-muted/20" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredStudents.map((student) => (
+            <Card
+              key={student.id}
+              className="cursor-pointer hover:shadow-md transition-all hover:border-primary/50"
+            >
+              <CardContent className="p-6">
+                <div className="flex flex-col gap-4">
+                  {/* Student Header */}
+                  <div className="flex items-start gap-4">
+                    <Avatar className="h-12 w-12">
+                      <AvatarFallback className="bg-primary text-primary-foreground">
+                        {getInitials(student.first_name, student.last_name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-lg truncate">
+                        {student.first_name} {student.last_name}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {student.student_id}
+                      </p>
+                      <Badge variant="secondary" className="text-xs mt-1">
+                        Active
                       </Badge>
-                    ))}
+                    </div>
+                  </div>
+
+                  {/* Student Details */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="truncate">{student.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{student.phone || "Not provided"}</span>
+                    </div>
+                  </div>
+
+                  {/* Performance Stats - TODO: Get from Laravel API */}
+                  <div className="grid grid-cols-2 gap-3 pt-3 border-t">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <TrendingUp className="h-3.5 w-3.5" />
+                        <span>GPA</span>
+                      </div>
+                      <p className="text-lg font-semibold">N/A</p>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>Attendance</span>
+                      </div>
+                      <p className="text-lg font-semibold">N/A</p>
+                    </div>
+                  </div>
+
+                  {/* Enrolled Classes - TODO: Get from Laravel API */}
+                  <div className="pt-3 border-t">
+                    <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
+                      <BookOpen className="h-3.5 w-3.5" />
+                      <span>Enrolled Classes</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="outline" className="text-xs">
+                        TBD
+                      </Badge>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {filteredStudents.length === 0 && (
         <Card>

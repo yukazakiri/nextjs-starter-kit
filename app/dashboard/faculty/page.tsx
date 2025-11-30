@@ -15,8 +15,7 @@ import {
   TrendingUp,
   Clock,
 } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { getCurrentAcademicSettings } from "@/lib/enrollment";
+import { laravelApi, type LaravelFaculty } from "@/lib/laravel-api";
 
 export default async function FacultyDashboardPage() {
   const { userId } = await auth();
@@ -43,7 +42,8 @@ export default async function FacultyDashboardPage() {
     redirect("/onboarding");
   }
 
-  // Fetch faculty classes data directly from database
+  // Fetch faculty data from Laravel API
+  let facultyData: LaravelFaculty | null = null;
   let classCount = 0;
   let totalStudents = 0;
   let todaySchedule: Array<{
@@ -56,115 +56,20 @@ export default async function FacultyDashboardPage() {
   }> = [];
 
   try {
-    // Get current academic settings
-    const academicSettings = await getCurrentAcademicSettings();
-    const { semester, schoolYear } = academicSettings;
+    // Get faculty data from Laravel API
+    facultyData = await laravelApi.getFaculty(facultyId);
+    classCount = facultyData.data.classes_count;
+    totalStudents = facultyData.data.class_enrollments_count;
 
-    // Fetch classes for the faculty
-    const classes = await prisma.classes.findMany({
-      where: {
-        faculty_id: facultyId,
-        semester: semester,
-        school_year: schoolYear,
-      },
-      select: {
-        id: true,
-        subject_code: true,
-        section: true,
-        subject: {
-          select: {
-            code: true,
-            title: true,
-          },
-        },
-      },
-    });
-
-    classCount = classes.length;
-
-    // Get enrolled students count for each class
-    for (const classItem of classes) {
-      const count = await prisma.subject_enrollments.count({
-        where: {
-          class_id: classItem.id,
-          school_year: schoolYear,
-          semester: parseInt(semester),
-        },
-      });
-      totalStudents += count;
-    }
-
-    // Get today's schedule
-    const daysOfWeek = [
-      "Sunday",
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-    ];
-    const today = daysOfWeek[new Date().getDay()];
-
-    const classIds = classes.map((c) => BigInt(c.id));
-
-    if (classIds.length > 0) {
-      const schedules = await prisma.schedule.findMany({
-        where: {
-          class_id: {
-            in: classIds,
-          },
-          day_of_week: today,
-          deleted_at: null,
-        },
-        orderBy: {
-          start_time: "asc",
-        },
-      });
-
-      // Get rooms
-      const roomIds = schedules
-        .map((s) => s.room_id)
-        .filter((id): id is bigint => id !== null);
-
-      const rooms = await prisma.rooms.findMany({
-        where: {
-          id: {
-            in: roomIds,
-          },
-        },
-      });
-
-      const roomMap = new Map(rooms.map((r) => [r.id.toString(), r]));
-
-      // Format schedule data
-      todaySchedule = schedules.map((schedule) => {
-        const classInfo = classes.find(
-          (c) => c.id === Number(schedule.class_id),
-        );
-        const room = schedule.room_id
-          ? roomMap.get(schedule.room_id.toString())
-          : null;
-
-        const formatTime = (date: Date) => {
-          const hours = date.getUTCHours().toString().padStart(2, "0");
-          const minutes = date.getUTCMinutes().toString().padStart(2, "0");
-          return `${hours}:${minutes}`;
-        };
-
-        return {
-          subjectCode:
-            classInfo?.subject?.code || classInfo?.subject_code || "N/A",
-          subjectName: classInfo?.subject?.title || "N/A",
-          startTime: formatTime(schedule.start_time),
-          endTime: formatTime(schedule.end_time),
-          room: room ? `${room.name}` : "TBA",
-          section: classInfo?.section || "",
-        };
-      });
-    }
+    // TODO: Implement today's schedule fetching from Laravel API
+    // For now, keeping the schedule empty until we have the API endpoint
+    todaySchedule = [];
   } catch (error) {
-    console.error("Error fetching faculty classes:", error);
+    console.error("Error fetching faculty data from Laravel API:", error);
+    // Set defaults if API fails
+    classCount = 0;
+    totalStudents = 0;
+    todaySchedule = [];
   }
 
   return (
