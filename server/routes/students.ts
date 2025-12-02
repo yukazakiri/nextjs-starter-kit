@@ -160,4 +160,68 @@ export const students = new Elysia({ prefix: "/students" })
   )
   .get("/test", async () => {
     return { success: true, message: "Test endpoint" };
+  })
+  .get("/:id", async ({ params }) => {
+    try {
+      // Ensure user is authenticated
+      try {
+        await requireAuth();
+      } catch {
+        return unauthorized();
+      }
+
+      const studentId = params.id;
+
+      if (!studentId) {
+        return badRequest("Student ID is required");
+      }
+
+      console.log("[STUDENT DETAILS] Fetching student:", studentId);
+
+      // Get the Laravel API URL and token from environment
+      const baseURL = process.env.DCCP_API_URL || "http://localhost:8000";
+      const token = process.env.DCCP_API_TOKEN;
+
+      if (!token) {
+        console.error("[STUDENT DETAILS] DCCP_API_TOKEN not configured");
+        return serverError("API configuration error");
+      }
+
+      // Forward request to Laravel API
+      const response = await fetch(`${baseURL}/api/students/${studentId}`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        console.error(
+          `[STUDENT DETAILS] Laravel API error: ${response.status} ${response.statusText}`
+        );
+        const errorText = await response.text();
+        console.error("[STUDENT DETAILS] Error response:", errorText);
+
+        if (response.status === 404) {
+          return serverError("Student not found");
+        }
+
+        return serverError(
+          `Failed to fetch student details: ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      console.log("[STUDENT DETAILS] Student found:", data?.data?.student_id || data?.data?.id);
+
+      return data;
+    } catch (error) {
+      console.error("[STUDENT DETAILS] Error fetching student details:", error);
+      return serverError(
+        "Internal server error. Please try again later.",
+        error instanceof Error ? error.message : "Unknown error"
+      );
+    }
   });

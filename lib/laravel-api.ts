@@ -349,6 +349,10 @@ class LaravelApiClient {
             body: JSON.stringify(assignmentData),
         });
     }
+
+    async getStudentDetails(studentId: string | number): Promise<any> {
+        return this.request<any>(`/api/students/${studentId}`);
+    }
 }
 
 // Helper functions for data transformation
