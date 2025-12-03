@@ -66,11 +66,21 @@ export default async function ClassDetailPage({
 }) {
   const { userId } = await auth();
 
+  // Early redirect if not authenticated
   if (!userId) {
     redirect("/sign-in");
   }
 
-  const client = await clerkClient();
+  // Don't wait for user verification, do it in parallel
+  const clientPromise = clerkClient();
+
+  const { classId } = await params;
+
+  // Start fetching data immediately without blocking
+  const classDetailsPromise = getClassDetails(classId);
+
+  // Verify user in parallel
+  const client = await clientPromise;
   const user = await client.users.getUser(userId);
   const userRole = user.publicMetadata?.role as string | undefined;
   const facultyId = user.publicMetadata?.facultyId as string | undefined;
@@ -84,8 +94,8 @@ export default async function ClassDetailPage({
     redirect("/onboarding");
   }
 
-  const { classId } = await params;
-  const classDetails = await getClassDetails(classId);
+  // Wait for class details
+  const classDetails = await classDetailsPromise;
 
   if (!classDetails) {
     return (

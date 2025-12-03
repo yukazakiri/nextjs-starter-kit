@@ -88,162 +88,90 @@ export const faculty = new Elysia({ prefix: "/faculty" })
       // Get authenticated user
       const userId = await requireAuth();
 
-      // Get user email from Clerk
-      const userEmail = await getUserEmail(userId);
+      // Import Clerk client to get user metadata
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
 
-      if (!userEmail) {
-        return badRequest("Email not found");
+      // Get facultyId from user metadata (set during onboarding)
+      const facultyId = user.publicMetadata?.facultyId as string;
+
+      if (!facultyId) {
+        return badRequest("Faculty ID not found in user metadata");
       }
 
-      // Find faculty by email
-      const facultyRecord = await prisma.faculty.findUnique({
-        where: {
-          email: userEmail,
-        },
-        select: {
-          id: true,
-        },
-      });
+      console.log("[FACULTY CLASSES] Fetching faculty:", facultyId);
 
-      if (!facultyRecord) {
+      // Import Laravel API
+      const { laravelApi } = await import("@/lib/laravel-api");
+
+      // Fetch faculty data from Laravel API
+      const facultyData = await laravelApi.getFaculty(facultyId);
+
+      if (!facultyData?.data) {
         return notFound("Faculty not found");
       }
 
-      const facultyId = facultyRecord.id;
+      const faculty = facultyData.data;
+      const facultyClasses = faculty.classes || [];
 
-      // Get current academic settings
-      const academicSettings = await getCurrentAcademicSettings();
-      const { semester, schoolYear } = academicSettings;
+      console.log(`[FACULTY CLASSES] Found ${facultyClasses.length} classes`);
 
-      console.log("[FACULTY CLASSES] Fetching classes for:", {
-        facultyId,
-        semester,
-        schoolYear,
+      // Map classes to frontend format
+      const mappedClasses = facultyClasses.map((cls: any) => {
+        // Generate a consistent color based on subject code
+        const colors = ["blue", "green", "purple", "orange", "pink", "teal", "indigo"];
+        const colorIndex = cls.subject_code
+          ? cls.subject_code.split("").reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) % colors.length
+          : 0;
+
+        return {
+          id: cls.id,
+          subjectCode: cls.subject_code || "",
+          subjectName: cls.subject_title || "",
+          section: cls.section || "",
+          semester: cls.semester || "",
+          schoolYear: cls.school_year || "",
+          enrolledStudents: parseInt(cls.student_count || "0"),
+          maximumSlots: cls.maximum_slots || 30,
+          credits: 3, // Default
+          lecture: 3, // Default
+          laboratory: 0, // Default
+          classification: cls.classification || "College",
+          gradeLevel: cls.grade_level || "N/A",
+          faculty: faculty.full_name || "",
+          department: faculty.department || "",
+          color: colors[colorIndex],
+          status: "Active",
+          progress: 0,
+          completionRate: 0,
+          gradeDistribution: [
+            { grade: "A", count: 0 },
+            { grade: "B", count: 0 },
+            { grade: "C", count: 0 },
+            { grade: "D", count: 0 },
+            { grade: "F", count: 0 },
+          ],
+          schedules: [],
+          formattedSchedule: "Schedule not available",
+          isFull: parseInt(cls.student_count || "0") >= (cls.maximum_slots || 30),
+          availableSlots: Math.max(0, (cls.maximum_slots || 30) - parseInt(cls.student_count || "0")),
+        };
       });
-
-      // Fetch classes for the faculty based on current semester and school year
-      const classes = await prisma.classes.findMany({
-        where: {
-          faculty_id: facultyId,
-          semester: semester,
-          school_year: schoolYear,
-        },
-        include: {
-          subject: {
-            select: {
-              code: true,
-              title: true,
-              units: true,
-              lecture: true,
-              laboratory: true,
-            },
-          },
-        },
-        orderBy: {
-          created_at: "desc",
-        },
-      });
-
-      console.log(`[FACULTY CLASSES] Found ${classes.length} classes`);
-
-      // For each class, get the enrolled students count from subject_enrollments
-      const classesWithEnrollment = await Promise.all(
-        classes.map(async (classItem) => {
-          // Get enrolled students for this class
-          const enrolledStudentsCount = await prisma.subject_enrollments.count({
-            where: {
-              class_id: classItem.id,
-              school_year: schoolYear,
-              semester: parseInt(semester),
-            },
-          });
-
-          // Get all enrolled students with their details
-          const enrolledStudents = await prisma.subject_enrollments.findMany({
-            where: {
-              class_id: classItem.id,
-              school_year: schoolYear,
-              semester: parseInt(semester),
-            },
-            select: {
-              student_id: true,
-              grade: true,
-              remarks: true,
-              created_at: true,
-            },
-          });
-
-          // Get student details
-          const studentIds = enrolledStudents
-            .map((e) => e.student_id)
-            .filter((id): id is number => id !== null);
-
-          const students = await prisma.students.findMany({
-            where: {
-              id: {
-                in: studentIds.map((id) => BigInt(id)),
-              },
-            },
-            select: {
-              id: true,
-              first_name: true,
-              last_name: true,
-              middle_name: true,
-              email: true,
-              student_id: true,
-            },
-          });
-
-          // Map student details with enrollment info
-          const studentsWithEnrollment = enrolledStudents.map((enrollment) => {
-            const student = students.find(
-              (s) => s.id === BigInt(enrollment.student_id || 0)
-            );
-            return {
-              studentId: student?.id.toString() || "",
-              studentNumber: student?.student_id?.toString() || "",
-              firstName: student?.first_name || "",
-              lastName: student?.last_name || "",
-              middleName: student?.middle_name || "",
-              email: student?.email || "",
-              grade: enrollment.grade,
-              remarks: enrollment.remarks,
-              enrolledAt: enrollment.created_at,
-            };
-          });
-
-          return {
-            id: classItem.id,
-            subjectCode: classItem.subject_code || classItem.subject?.code || "",
-            subjectName: classItem.subject?.title || "",
-            section: classItem.section || "",
-            semester: classItem.semester || "",
-            schoolYear: classItem.school_year || "",
-            academicYear: classItem.academic_year || "",
-            courseCodes: classItem.course_codes || "",
-            classification: classItem.classification || "",
-            gradeLevel: classItem.grade_level || "",
-            maximumSlots: classItem.maximum_slots || 0,
-            enrolledStudents: enrolledStudentsCount,
-            students: studentsWithEnrollment,
-            credits: Number(classItem.subject?.units || 0),
-            lecture: Number(classItem.subject?.lecture || 0),
-            laboratory: Number(classItem.subject?.laboratory || 0),
-          };
-        })
-      );
 
       return {
         success: true,
-        classes: classesWithEnrollment,
-        academicSettings: {
-          semester,
-          schoolYear,
+        classes: mappedClasses,
+        faculty: {
+          id: faculty.id,
+          name: faculty.full_name,
+          department: faculty.department,
+          email: faculty.email,
         },
       };
     } catch (error) {
       console.error("[FACULTY CLASSES] Error:", error);
-      return serverError("An error occurred while fetching classes");
+      return serverError("An error occurred while fetching classes", error instanceof Error ? error.message : String(error));
     }
   })
   .get(

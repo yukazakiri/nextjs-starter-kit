@@ -22,6 +22,8 @@ import {
 import { FacultyClass } from "./class-card";
 import { useSemester } from "@/contexts/semester-context";
 import Link from "next/link";
+import React, { Suspense } from "react";
+import { ClassCardSkeleton } from "./skeletons/class-card-skeleton";
 
 interface EnhancedClassesLayoutProps {
   initialClasses: FacultyClass[];
@@ -142,7 +144,9 @@ export function EnhancedClassesLayout({ initialClasses }: EnhancedClassesLayoutP
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredClasses.map((cls) => (
-            <GradientClassCard key={cls.id} classItem={cls} />
+            <Suspense key={cls.id} fallback={<ClassCardSkeleton />}>
+              <GradientClassCard classItem={cls} />
+            </Suspense>
           ))}
         </div>
       )}
@@ -303,7 +307,8 @@ function GradientClassCard({ classItem }: { classItem: FacultyClass }) {
               // Prevent card navigation
               e.preventDefault();
               e.stopPropagation();
-              // TODO: Implement view students functionality
+              // Navigate to Students tab
+              window.location.href = `/dashboard/faculty/classes/${classItem.id}?tab=people`;
             }}
           >
             <UserCheck className="h-3 w-3 mr-2" />
@@ -316,7 +321,8 @@ function GradientClassCard({ classItem }: { classItem: FacultyClass }) {
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              // TODO: Implement attendance functionality
+              // Navigate to Attendance tab
+              window.location.href = `/dashboard/faculty/classes/${classItem.id}?tab=attendance`;
             }}
           >
             <ClipboardCheck className="h-3 w-3 mr-2" />
@@ -329,8 +335,8 @@ function GradientClassCard({ classItem }: { classItem: FacultyClass }) {
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              // Navigate to grades page
-              window.location.href = `/dashboard/faculty/grades/${classItem.id}`;
+              // Navigate to Grades tab
+              window.location.href = `/dashboard/faculty/classes/${classItem.id}?tab=grades`;
             }}
           >
             <Award className="h-3 w-3 mr-2" />
@@ -343,7 +349,8 @@ function GradientClassCard({ classItem }: { classItem: FacultyClass }) {
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              // TODO: Implement announcements functionality
+              // Navigate to Announcements tab
+              window.location.href = `/dashboard/faculty/classes/${classItem.id}?tab=announcements`;
             }}
           >
             <Bell className="h-3 w-3 mr-2" />
