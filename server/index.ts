@@ -9,6 +9,7 @@ import { facultyClasses } from "./routes/faculty-classes";
 import { schedule } from "./routes/schedule";
 import { students } from "./routes/students";
 import { uploadImage } from "./routes/upload-image";
+import { user } from "./routes/user";
 
 export const app = new Elysia({ prefix: "/api" })
     .use(auth)
@@ -16,6 +17,7 @@ export const app = new Elysia({ prefix: "/api" })
     .use(faculty)
     .use(schedule)
     .use(academicPeriods)
+    .use(user)
     .use(chat)
     .use(uploadImage)
     .use(debug)
