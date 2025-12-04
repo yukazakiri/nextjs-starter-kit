@@ -77,11 +77,11 @@ export const faculty = new Elysia({ prefix: "/faculty" })
         );
       }
     },
-  {
-    params: t.Object({
-      facultyId: t.String(),
-    }),
-  }
+    {
+      params: t.Object({
+        facultyId: t.String(),
+      }),
+    }
   )
   .get("/classes", async () => {
     try {
@@ -577,4 +577,189 @@ export const faculty = new Elysia({ prefix: "/faculty" })
         metadata: t.Record(t.String(), t.Any()),
       }),
     }
+  )
+  .get(
+    "/:facultyId/students",
+    async ({ params }) => {
+      try {
+        // Ensure user is authenticated
+        try {
+          await requireAuth();
+        } catch {
+          return unauthorized();
+        }
+
+        const facultyId = params.facultyId;
+
+        if (!facultyId) {
+          return badRequest("Faculty ID is required");
+        }
+
+        console.log(`[FACULTY STUDENTS] Fetching students for faculty: ${facultyId}`);
+
+        // Get the Laravel API URL and token from environment
+        const baseURL = process.env.DCCP_API_URL || "http://localhost:8000";
+        const token = process.env.DCCP_API_TOKEN;
+
+        if (!token) {
+          console.error("[FACULTY STUDENTS] DCCP_API_TOKEN not configured");
+          return serverError("API configuration error");
+        }
+
+        // Fetch faculty data from Laravel API
+        const facultyResponse = await fetch(`${baseURL}/api/faculties/${facultyId}`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!facultyResponse.ok) {
+          console.error(
+            `[FACULTY STUDENTS] Laravel API error: ${facultyResponse.status} ${facultyResponse.statusText}`
+          );
+          return serverError("Failed to fetch faculty details");
+        }
+
+        const facultyData = await facultyResponse.json();
+        const classes = facultyData?.data?.classes || [];
+
+        console.log(`[FACULTY STUDENTS] Found ${classes.length} classes for faculty`);
+
+        if (classes.length === 0) {
+          return {
+            success: true,
+            students: [],
+            classes: [],
+          };
+        }
+
+        // Fetch students from each class
+        const studentMap = new Map<string, {
+          id: string;
+          student_id: string;
+          first_name: string;
+          last_name: string;
+          middle_name: string;
+          email: string;
+          phone?: string;
+          classes: Array<{
+            id: number;
+            subject_code: string;
+            subject_title: string;
+            section: string;
+            grade_level: string;
+            classification: string;
+          }>;
+        }>();
+
+        // Fetch all class details in parallel
+        const classDetailsPromises = classes.map(async (cls: any) => {
+          try {
+            const classResponse = await fetch(`${baseURL}/api/classes/${cls.id}`, {
+              method: "GET",
+              headers: {
+                Accept: "application/json",
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            });
+
+            if (!classResponse.ok) {
+              console.error(`[FACULTY STUDENTS] Failed to fetch class ${cls.id}`);
+              return null;
+            }
+
+            const classData = await classResponse.json();
+            return classData?.data;
+          } catch (error) {
+            console.error(`[FACULTY STUDENTS] Error fetching class ${cls.id}:`, error);
+            return null;
+          }
+        });
+
+        const classDetails = (await Promise.all(classDetailsPromises)).filter(Boolean);
+
+        console.log(`[FACULTY STUDENTS] Fetched ${classDetails.length} class details`);
+
+        // Process each class and its enrolled students
+        for (const classDetail of classDetails) {
+          if (!classDetail) continue;
+
+          const enrolledStudents = classDetail.enrolled_students || [];
+
+          for (const enrollment of enrolledStudents) {
+            const student = enrollment.student;
+            if (!student) continue;
+
+            const studentId = student.id || student.student_id;
+
+            // Class info to add to student
+            const classInfo = {
+              id: classDetail.id,
+              subject_code: classDetail.class_information?.subject_code || "",
+              subject_title: classDetail.subject_information?.[0]?.subject_title ||
+                classDetail.course_information?.formatted_course_codes || "",
+              section: classDetail.class_information?.section || "",
+              grade_level: classDetail.shs_information?.grade_level ||
+                classDetail.classification || "",
+              classification: classDetail.classification || "",
+            };
+
+            if (studentMap.has(studentId)) {
+              // Student already exists, add this class to their list
+              const existingStudent = studentMap.get(studentId)!;
+              existingStudent.classes.push(classInfo);
+            } else {
+              // New student, add to map
+              studentMap.set(studentId, {
+                id: studentId,
+                student_id: student.student_id || studentId,
+                first_name: student.first_name || "",
+                last_name: student.last_name || "",
+                middle_name: student.middle_name || "",
+                email: student.email || "",
+                phone: student.phone || "",
+                classes: [classInfo],
+              });
+            }
+          }
+        }
+
+        // Convert map to array
+        const students = Array.from(studentMap.values());
+
+        console.log(`[FACULTY STUDENTS] Returning ${students.length} unique students`);
+
+        // Prepare class list for filtering
+        const classList = classes.map((cls: any) => ({
+          id: cls.id,
+          subject_code: cls.subject_code,
+          subject_title: cls.subject_title,
+          section: cls.section,
+          display_info: cls.display_info,
+          grade_level: cls.grade_level,
+        }));
+
+        return {
+          success: true,
+          students,
+          classes: classList,
+        };
+      } catch (error) {
+        console.error("[FACULTY STUDENTS] Error fetching students:", error);
+        return serverError(
+          "Internal server error. Please try again later.",
+          error instanceof Error ? error.message : "Unknown error"
+        );
+      }
+    },
+    {
+      params: t.Object({
+        facultyId: t.String(),
+      }),
+    }
   );
+

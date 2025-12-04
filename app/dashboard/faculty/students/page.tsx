@@ -16,96 +16,142 @@ import {
   Mail,
   Phone,
   BookOpen,
-  TrendingUp,
-  Calendar,
+  AlertCircle,
 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useState, useMemo } from "react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { laravelApi, type LaravelStudent } from "@/lib/laravel-api";
 import { StudentCardSkeleton } from "../_components/skeletons/student-card-skeleton";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api-client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+interface StudentData {
+  id: string;
+  student_id: string;
+  first_name: string;
+  last_name: string;
+  middle_name: string;
+  email: string;
+  phone?: string;
+  classes: Array<{
+    id: number;
+    subject_code: string;
+    subject_title: string;
+    section: string;
+    grade_level: string;
+    classification: string;
+  }>;
+}
+
+interface ClassData {
+  id: number;
+  subject_code: string;
+  subject_title: string;
+  section: string;
+  display_info: string;
+  grade_level: string;
+}
 
 export default function FacultyStudentsPage() {
   const router = useRouter();
   const { user } = useUser();
-  const [students, setStudents] = useState<LaravelStudent[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
-  const [yearFilter, setYearFilter] = useState("all");
+  const [gradeLevelFilter, setGradeLevelFilter] = useState("all");
 
-  // Redirect non-faculty users to student dashboard
-  useEffect(() => {
-    if (user) {
-      const userRole = user.publicMetadata?.role as string;
-      if (userRole !== "faculty") {
-        router.push("/dashboard/student");
-        return;
+  const facultyId = user?.publicMetadata?.facultyId as string;
+  const userRole = user?.publicMetadata?.role as string;
+
+  // Redirect non-faculty users
+  if (user && userRole !== "faculty") {
+    router.push("/dashboard/student");
+    return null;
+  }
+
+  // Fetch students using Elysia API
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["faculty-students", facultyId],
+    queryFn: async () => {
+      if (!facultyId) throw new Error("Faculty ID not found");
+
+      const response = await api.faculty[facultyId].students.get();
+
+      if (response.error) {
+        throw new Error("Failed to fetch students");
       }
 
-      // Fetch students from Laravel API
-      fetchStudents();
-    }
-  }, [user]);
-
-  const fetchStudents = async () => {
-    const facultyId = user?.publicMetadata?.facultyId as string;
-    if (!facultyId) {
-      console.error("No faculty ID found in user metadata");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const facultyData = await laravelApi.getFaculty(facultyId);
-      
-      // Check if facultyData is valid
-      if (!facultyData || !facultyData.data || !Array.isArray(facultyData.data.classes)) {
-        console.error("Faculty data is invalid or classes not found:", facultyData);
-        setStudents([]);
-        return;
-      }
-      
-      // For now, we'll need to get students from each class
-      // TODO: Update this when we have a direct students endpoint
-      const allStudents: LaravelStudent[] = [];
-      
-      for (const classItem of facultyData.data.classes) {
-        const classStudents = await laravelApi.getClassStudents(classItem.id);
-        allStudents.push(...classStudents);
-      }
-      
-      // Remove duplicates (students might be in multiple classes)
-      const uniqueStudents = allStudents.filter((student, index, self) => 
-        index === self.findIndex((s) => s.id === student.id)
-      );
-      
-      setStudents(uniqueStudents);
-    } catch (error) {
-      console.error("Error fetching students from Laravel API:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredStudents = students.filter((student) => {
-    const matchesSearch =
-      student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.student_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.email?.toLowerCase().includes(searchQuery.toLowerCase());
-
-    // TODO: Implement class and year filtering when we have the data
-    const matchesClass = classFilter === "all"; // Placeholder
-    const matchesYear = yearFilter === "all"; // Placeholder
-
-    return matchesSearch && matchesClass && matchesYear;
+      return response.data as {
+        success: boolean;
+        students: StudentData[];
+        classes: ClassData[];
+      };
+    },
+    enabled: !!facultyId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  const students = data?.students || [];
+  const classes = data?.classes || [];
+
+  // Extract unique grade levels from students' classes
+  const gradeLevels = useMemo(() => {
+    const levels = new Set<string>();
+    students.forEach(student => {
+      student.classes.forEach(cls => {
+        if (cls.grade_level) {
+          levels.add(cls.grade_level);
+        }
+      });
+    });
+    return Array.from(levels).sort();
+  }, [students]);
+
+  // Filter students
+  const filteredStudents = useMemo(() => {
+    return students.filter((student) => {
+      // Search filter
+      const matchesSearch =
+        student.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.student_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.email?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      // Class filter
+      const matchesClass = classFilter === "all" ||
+        student.classes.some(cls => cls.id.toString() === classFilter);
+
+      // Grade level filter
+      const matchesGradeLevel = gradeLevelFilter === "all" ||
+        student.classes.some(cls => cls.grade_level === gradeLevelFilter);
+
+      return matchesSearch && matchesClass && matchesGradeLevel;
+    });
+  }, [students, searchQuery, classFilter, gradeLevelFilter]);
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName?.charAt(0)}${lastName?.charAt(0)}`.toUpperCase();
   };
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Students</h1>
+          <p className="text-muted-foreground mt-2">
+            View and manage students enrolled in your classes
+          </p>
+        </div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Failed to load students. Please try again later.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -137,22 +183,24 @@ export default function FacultyStudentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Classes</SelectItem>
-                  <SelectItem value="CS 401">CS 401</SelectItem>
-                  <SelectItem value="CS 305">CS 305</SelectItem>
-                  <SelectItem value="CS 201">CS 201</SelectItem>
-                  <SelectItem value="CS 101">CS 101</SelectItem>
+                  {classes.map((cls) => (
+                    <SelectItem key={cls.id} value={cls.id.toString()}>
+                      {cls.display_info || `${cls.subject_code} - ${cls.section}`}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <Select value={yearFilter} onValueChange={setYearFilter}>
+              <Select value={gradeLevelFilter} onValueChange={setGradeLevelFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Filter by Year Level" />
+                  <SelectValue placeholder="Filter by Grade Level" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Year Levels</SelectItem>
-                  <SelectItem value="1st Year">1st Year</SelectItem>
-                  <SelectItem value="2nd Year">2nd Year</SelectItem>
-                  <SelectItem value="3rd Year">3rd Year</SelectItem>
-                  <SelectItem value="4th Year">4th Year</SelectItem>
+                  <SelectItem value="all">All Grade Levels</SelectItem>
+                  {gradeLevels.map((level) => (
+                    <SelectItem key={level} value={level}>
+                      {level}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -168,18 +216,38 @@ export default function FacultyStudentsPage() {
                   Student{filteredStudents.length !== 1 ? "s" : ""}
                 </span>
               </div>
+              {classFilter !== "all" && (
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    Filtered by class
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Student List */}
-      {loading ? (
+      {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <StudentCardSkeleton key={i} />
           ))}
         </div>
+      ) : filteredStudents.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <User className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No students found</h3>
+            <p className="text-muted-foreground text-center">
+              {students.length === 0
+                ? "You don't have any students enrolled in your classes yet."
+                : "Try adjusting your filters or search query"}
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredStudents.map((student) => (
@@ -212,43 +280,39 @@ export default function FacultyStudentsPage() {
                   {/* Student Details */}
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-sm">
-                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                       <span className="truncate">{student.email}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>{student.phone || "Not provided"}</span>
-                    </div>
+                    {student.phone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                        <span>{student.phone}</span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Performance Stats - TODO: Get from Laravel API */}
-                  <div className="grid grid-cols-2 gap-3 pt-3 border-t">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <TrendingUp className="h-3.5 w-3.5" />
-                        <span>GPA</span>
-                      </div>
-                      <p className="text-lg font-semibold">N/A</p>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="h-3.5 w-3.5" />
-                        <span>Attendance</span>
-                      </div>
-                      <p className="text-lg font-semibold">N/A</p>
-                    </div>
-                  </div>
-
-                  {/* Enrolled Classes - TODO: Get from Laravel API */}
+                  {/* Enrolled Classes */}
                   <div className="pt-3 border-t">
                     <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
                       <BookOpen className="h-3.5 w-3.5" />
-                      <span>Enrolled Classes</span>
+                      <span>Enrolled Classes ({student.classes.length})</span>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      <Badge variant="outline" className="text-xs">
-                        TBD
-                      </Badge>
+                      {student.classes.slice(0, 3).map((cls) => (
+                        <Badge
+                          key={cls.id}
+                          variant="outline"
+                          className="text-xs"
+                          title={`${cls.subject_code} - ${cls.section}`}
+                        >
+                          {cls.subject_code}
+                        </Badge>
+                      ))}
+                      {student.classes.length > 3 && (
+                        <Badge variant="outline" className="text-xs">
+                          +{student.classes.length - 3} more
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -256,18 +320,6 @@ export default function FacultyStudentsPage() {
             </Card>
           ))}
         </div>
-      )}
-
-      {filteredStudents.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <User className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No students found</h3>
-            <p className="text-muted-foreground text-center">
-              Try adjusting your filters or search query
-            </p>
-          </CardContent>
-        </Card>
       )}
     </div>
   );

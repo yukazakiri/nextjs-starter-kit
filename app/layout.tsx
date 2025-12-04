@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { ThemeProvider } from "../components/provider";
+import { ThemeProvider, Providers } from "../components/provider";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 
@@ -38,18 +38,20 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
         <body className={`font-[-apple-system,BlinkMacSystemFont]antialiased`}>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            enableSystem={false}
-            forcedTheme="light"
-            disableTransitionOnChange
-            enableColorScheme={false}
-          >
-            {children}
-            <Toaster />
-            <Analytics />
-          </ThemeProvider>
+          <Providers>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="light"
+              enableSystem={false}
+              forcedTheme="light"
+              disableTransitionOnChange
+              enableColorScheme={false}
+            >
+              {children}
+              <Toaster />
+              <Analytics />
+            </ThemeProvider>
+          </Providers>
         </body>
       </html>
     </ClerkProvider>

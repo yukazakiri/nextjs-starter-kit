@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import {
   BookOpen,
   Users,
@@ -18,12 +19,15 @@ import {
   UserCheck,
   Award,
   Bell,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { FacultyClass } from "./class-card";
 import { useSemester } from "@/contexts/semester-context";
 import Link from "next/link";
-import React, { Suspense } from "react";
+import React, { Suspense, useState } from "react";
 import { ClassCardSkeleton } from "./skeletons/class-card-skeleton";
+import { ModernClassCard } from "./modern-class-card";
 
 interface EnhancedClassesLayoutProps {
   initialClasses: FacultyClass[];
@@ -38,6 +42,7 @@ function getColorIndex(subjectCode: string): number {
 
 export function EnhancedClassesLayout({ initialClasses }: EnhancedClassesLayoutProps) {
   const { semester, schoolYear } = useSemester();
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   // Filter classes based on global academic period
   const filteredClasses = initialClasses.filter((cls) => {
@@ -66,15 +71,36 @@ export function EnhancedClassesLayout({ initialClasses }: EnhancedClassesLayoutP
         </div>
 
         {/* Action Buttons - Mobile stacked, Desktop inline */}
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Button variant="outline" className="w-full sm:w-auto">
-            <FolderOpen className="h-4 w-4 mr-2" />
-            Export Report
-          </Button>
-          <Button className="w-full sm:w-auto">
-            <BookOpen className="h-4 w-4 mr-2" />
-            Create Class
-          </Button>
+        <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
+          <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg self-start sm:self-auto">
+            <Button
+              variant={viewMode === "grid" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setViewMode("grid")}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setViewMode("list")}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button variant="outline" className="w-full sm:w-auto">
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Export Report
+            </Button>
+            <Button className="w-full sm:w-auto">
+              <BookOpen className="h-4 w-4 mr-2" />
+              Create Class
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -142,10 +168,15 @@ export function EnhancedClassesLayout({ initialClasses }: EnhancedClassesLayoutP
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className={cn(
+          "grid gap-4 sm:gap-6",
+          viewMode === "grid"
+            ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+            : "grid-cols-1"
+        )}>
           {filteredClasses.map((cls) => (
             <Suspense key={cls.id} fallback={<ClassCardSkeleton />}>
-              <GradientClassCard classItem={cls} />
+              <ModernClassCard classItem={cls} viewMode={viewMode} />
             </Suspense>
           ))}
         </div>
@@ -154,210 +185,4 @@ export function EnhancedClassesLayout({ initialClasses }: EnhancedClassesLayoutP
   );
 }
 
-function GradientClassCard({ classItem }: { classItem: FacultyClass }) {
-  const enrollmentPercentage = (classItem.enrolledStudents / classItem.maximumSlots) * 100;
-  const isFull = classItem.enrolledStudents >= classItem.maximumSlots;
-  const isLowEnrollment = classItem.enrolledStudents < classItem.maximumSlots * 0.5 && classItem.enrolledStudents > 0;
-  const isEmpty = classItem.enrolledStudents === 0;
 
-  // Get color index based on subject code
-  const colorIndex = getColorIndex(classItem.subjectCode);
-
-  return (
-    <Link
-      href={`/dashboard/faculty/classes/${classItem.id}`}
-      className="group relative overflow-hidden rounded-xl border bg-card/50 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer block"
-      style={{
-        background: `linear-gradient(135deg,
-          hsl(var(--primary) / 0.05) 0%,
-          hsl(var(--accent) / 0.1) 100%),
-          linear-gradient(to bottom right,
-          hsla(${colorIndex * 36}, 70%, 60%, 0.15) 0%,
-          hsla(${colorIndex * 36 + 60}, 70%, 60%, 0.05) 100%)`
-      }}
-    >
-      {/* Colored accent bar */}
-      <div
-        className="h-1 w-full"
-        style={{
-          background: `hsl(${colorIndex * 36}, 70%, 60%)`
-        }}
-      />
-
-      <div className="p-4 sm:p-5 space-y-4">
-        {/* HEADER */}
-        <div className="space-y-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-2">
-                <Badge
-                  variant="secondary"
-                  className="font-mono text-xs"
-                  style={{
-                    backgroundColor: `hsla(${colorIndex * 36}, 70%, 60%, 0.2)`,
-                    color: `hsl(${colorIndex * 36}, 70%, 40%)`,
-                    borderColor: `hsla(${colorIndex * 36}, 70%, 60%, 0.3)`
-                  }}
-                >
-                  {classItem.subjectCode}
-                </Badge>
-                {isFull && <CheckCircle2 className="h-4 w-4 text-green-600" />}
-                {isLowEnrollment && <TrendingUp className="h-4 w-4 text-amber-600" />}
-                {isEmpty && <AlertCircle className="h-4 w-4 text-red-600" />}
-              </div>
-
-              <h3 className="font-semibold text-base sm:text-lg line-clamp-2 leading-tight text-card-foreground">
-                {classItem.subjectName}
-              </h3>
-            </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={(e) => {
-                // Prevent card navigation when clicking the menu button
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-            >
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="outline" className="text-xs">
-              Section {classItem.section}
-            </Badge>
-            {isFull && (
-              <Badge variant="outline" className="text-xs border-green-500/30 text-green-700">
-                Full
-              </Badge>
-            )}
-            {isLowEnrollment && !isFull && (
-              <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-700">
-                Low Enrollment
-              </Badge>
-            )}
-            {isEmpty && (
-              <Badge variant="outline" className="text-xs border-red-500/30 text-red-700">
-                No Students
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        <Separator className="bg-border/50" />
-
-        {/* ENROLLMENT SECTION */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium text-sm">{classItem.enrolledStudents}</span>
-              <span className="text-xs text-muted-foreground">/ {classItem.maximumSlots}</span>
-            </div>
-            <span className="text-sm font-bold">{Math.round(enrollmentPercentage)}%</span>
-          </div>
-
-          <Progress
-            value={enrollmentPercentage}
-            className="h-2"
-            style={{
-              '--progress-background': `hsl(${colorIndex * 36}, 70%, 60%)`
-            } as React.CSSProperties}
-          />
-
-          <div className="flex justify-between text-xs">
-            <span className="text-muted-foreground">
-              {classItem.availableSlots > 0
-                ? `${classItem.availableSlots} available`
-                : "Full"}
-            </span>
-            {isLowEnrollment && (
-              <span className="text-amber-600 font-medium">Needs recruitment</span>
-            )}
-            {isFull && (
-              <span className="text-green-600 font-medium">Capacity reached</span>
-            )}
-          </div>
-        </div>
-
-        <Separator className="bg-border/50" />
-
-        {/* SEMESTER */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Calendar className="h-3 w-3" />
-          <span>
-            {classItem.originalSemester || classItem.semester} • {classItem.schoolYear}
-          </span>
-        </div>
-
-        {/* QUICK ACTIONS - Mobile First: Stack vertically on mobile, 2x2 grid on larger screens */}
-        <div className="grid grid-cols-2 gap-2 pt-1" onClick={(e) => {
-          // Prevent card navigation when clicking quick actions
-          e.preventDefault();
-          e.stopPropagation();
-        }}>
-          <Button
-            size="sm"
-            variant="outline"
-            className="justify-start h-9 text-xs"
-            onClick={(e) => {
-              // Prevent card navigation
-              e.preventDefault();
-              e.stopPropagation();
-              // Navigate to Students tab
-              window.location.href = `/dashboard/faculty/classes/${classItem.id}?tab=people`;
-            }}
-          >
-            <UserCheck className="h-3 w-3 mr-2" />
-            <span className="hidden xs:inline">View </span>Students
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="justify-start h-9 text-xs"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              // Navigate to Attendance tab
-              window.location.href = `/dashboard/faculty/classes/${classItem.id}?tab=attendance`;
-            }}
-          >
-            <ClipboardCheck className="h-3 w-3 mr-2" />
-            <span className="hidden xs:inline">Take </span>Attendance
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="justify-start h-9 text-xs"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              // Navigate to Grades tab
-              window.location.href = `/dashboard/faculty/classes/${classItem.id}?tab=grades`;
-            }}
-          >
-            <Award className="h-3 w-3 mr-2" />
-            <span className="hidden xs:inline">Enter </span>Grades
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="justify-start h-9 text-xs"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              // Navigate to Announcements tab
-              window.location.href = `/dashboard/faculty/classes/${classItem.id}?tab=announcements`;
-            }}
-          >
-            <Bell className="h-3 w-3 mr-2" />
-            <span className="hidden xs:inline">Post </span>Announce
-          </Button>
-        </div>
-      </div>
-    </Link>
-  );
-}
