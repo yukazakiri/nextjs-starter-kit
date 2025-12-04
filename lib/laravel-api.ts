@@ -7,95 +7,171 @@ interface NextFetchRequestConfig {
     tags?: string[];
 }
 
-// Types based on Laravel API response structure
-export interface LaravelClassDetails {
-    data: {
-        id: number;
-        classification: string;
-        is_college: boolean;
-        is_shs: boolean;
-        class_information: {
-            section: string;
-            subject_code: string;
-            academic_year: string;
-            formatted_academic_year: string;
-            semester: string;
-            formatted_semester: string;
-            school_year: string;
-            maximum_slots: number;
-            enrolled_students: string;
-            available_slots: any;
-            is_full: boolean;
-        };
-        subject_information: Array<any>;
-        course_information: {
-            course_codes: Array<any>;
-            formatted_course_codes: string;
-            courses: string;
-        };
-        shs_information: {
-            grade_level: string;
-            track: {
-                id: string;
-                track_name: string;
-                track_code: string;
-            };
-            strand: {
-                id: string;
-                strand_name: string;
-                strand_code: string;
-            };
-            formatted_track_strand: string;
-        };
-        faculty_information: {
-            id: string;
-            full_name: string;
-            first_name: string;
-            middle_name: string;
-            last_name: string;
-            email: string;
-            phone: string;
-            avatar_url: string;
-        };
-        schedule_information: {
-            formatted_weekly_schedule: string;
-            schedules: Array<{
-                id: number;
-                day_of_week: string;
-                start_time: string;
-                end_time: string;
-                formatted_start_time: string;
-                formatted_end_time: string;
-                time_range: string;
-                room: {
-                    id: string;
-                    name: string;
-                    building: string;
-                    floor: string;
-                    capacity: string;
-                };
-            }>;
-        };
-        enrolled_students: Array<{
-            id: number;
-            student_id: number;
-            student: {
-                id: string;
-                student_id: string;
-                full_name: string;
-                first_name: string;
-                middle_name: string;
-                last_name: string;
-                email: string;
-                phone: string;
-            };
-            created_at: string;
-            updated_at: string;
+// --- New Interfaces based on User Request ---
+
+export interface ClassInformation {
+    section: string;
+    subject_code: string;
+    academic_year: string;
+    formatted_academic_year: string;
+    semester: string;
+    formatted_semester: string;
+    school_year: string;
+    maximum_slots: number;
+    enrolled_students: string; // The JSON shows this as string in class_information, but array in root. Keeping as string based on JSON.
+    available_slots: any; // JSON shows empty object, could be number or object
+    is_full: boolean;
+}
+
+export interface SubjectInformation {
+    type: string;
+    subject_code: string;
+    message: string;
+}
+
+export interface CourseInformation {
+    course_codes: (string | null)[];
+    formatted_course_codes: string;
+    courses: string;
+}
+
+export interface TrackStrand {
+    id: string;
+    track_name?: string;
+    track_code?: string;
+    strand_name?: string;
+    strand_code?: string;
+}
+
+export interface ShsInformation {
+    grade_level: string;
+    track: TrackStrand;
+    strand: TrackStrand;
+    formatted_track_strand: string;
+}
+
+export interface FacultyInformation {
+    id: string;
+    full_name: string;
+    first_name: string;
+    middle_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    avatar_url: string;
+}
+
+export interface Room {
+    id: string;
+    name: string;
+    building: string;
+    floor: string;
+    capacity: string;
+}
+
+export interface Schedule {
+    id: number;
+    day_of_week: string;
+    start_time: string;
+    end_time: string;
+    formatted_start_time: string;
+    formatted_end_time: string;
+    time_range: string;
+    room: Room;
+}
+
+export interface ScheduleInformation {
+    formatted_weekly_schedule: string;
+    schedules: Schedule[];
+}
+
+export interface Student {
+    id: string;
+    student_id: string;
+    full_name: string;
+    first_name: string;
+    middle_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+}
+
+export interface EnrolledStudent {
+    id: number;
+    student_id: number;
+    student: Student;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ClassSettings {
+    visual: {
+        background_color: string;
+        accent_color: string;
+        banner_image: string;
+        theme: string;
+    };
+    features: {
+        enable_announcements: string;
+        enable_grade_visibility: string;
+        enable_attendance_tracking: string;
+        allow_late_submissions: string;
+        enable_discussion_board: string;
+    };
+    custom: string;
+    raw: string;
+}
+
+export interface ClassData {
+    id: number;
+    classification: string;
+    is_college: boolean;
+    is_shs: boolean;
+    class_information: ClassInformation;
+    subject_information: SubjectInformation;
+    course_information: CourseInformation;
+    shs_information: ShsInformation;
+    faculty_information: FacultyInformation;
+    schedule_information: ScheduleInformation;
+    enrolled_students: EnrolledStudent[];
+    settings: ClassSettings;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface LaravelClassResponse {
+    data: ClassData;
+}
+
+export interface LaravelClassListResponse {
+    data: ClassData[];
+    links: {
+        first: string;
+        last: string;
+        prev: string;
+        next: string;
+    };
+    meta: {
+        current_page: number;
+        from: number;
+        last_page: number;
+        links: Array<{
+            url: string | null;
+            label: string;
+            active: boolean;
         }>;
-        created_at: string;
-        updated_at: string;
+        path: string;
+        per_page: number;
+        to: number;
+        total: number;
     };
 }
+
+// --- End New Interfaces ---
+
+// Keeping some old interfaces if they are used elsewhere or for compatibility
+// But LaravelClassDetails is now replaced/aliased to LaravelClassResponse for the new structure
+export type LaravelClassDetails = LaravelClassResponse;
 
 export interface LaravelFaculty {
     data: {
@@ -120,7 +196,7 @@ export interface LaravelFaculty {
         age: number;
         created_at: string;
         updated_at: string;
-        classes: LaravelClass[];
+        classes: LaravelClass[]; // This might need to be updated if faculty classes list also changed structure
         account: string;
         department_relation: string;
         class_enrollments_count: number;
@@ -128,6 +204,7 @@ export interface LaravelFaculty {
     };
 }
 
+// This was the old class interface, keeping it for now but it might be superseded by ClassData
 export interface LaravelClass {
     id: number;
     subject_code: string;
@@ -255,7 +332,9 @@ class LaravelApiClient {
 
             // Log network errors
             if (error instanceof Error && error.message.includes("fetch failed")) {
-                console.error("Network Error: Unable to connect to Laravel API. Please check if the server is running.");
+                console.error(
+                    "Network Error: Unable to connect to Laravel API. Please check if the server is running."
+                );
             }
 
             throw error;
@@ -303,20 +382,27 @@ class LaravelApiClient {
     async getClassDetails(
         classId: number,
         options?: { next?: NextFetchRequestConfig; cache?: RequestCache }
-    ): Promise<LaravelClassDetails> {
+    ): Promise<LaravelClassResponse> {
         const cacheKey = `class_details_${classId}`;
-        const cached = this.getFromCache<LaravelClassDetails>(cacheKey);
+        const cached = this.getFromCache<LaravelClassResponse>(cacheKey);
         if (cached) return cached;
 
-        const data = await this.request<LaravelClassDetails>(`/api/classes/${classId}`, options);
+        const data = await this.request<LaravelClassResponse>(`/api/classes/${classId}`, options);
         this.setCache(cacheKey, data);
         return data;
+    }
+
+    async getClasses(options?: {
+        next?: NextFetchRequestConfig;
+        cache?: RequestCache;
+    }): Promise<LaravelClassListResponse> {
+        return this.request<LaravelClassListResponse>(`/api/classes`, options);
     }
 
     async getBatchClassDetails(
         classIds: number[],
         options?: { next?: NextFetchRequestConfig; cache?: RequestCache }
-    ): Promise<Array<LaravelClassDetails>> {
+    ): Promise<Array<LaravelClassResponse>> {
         // Create array of promises for parallel fetching
         const promises = classIds.map(id =>
             this.getClassDetails(id, options).catch(error => {
@@ -329,7 +415,7 @@ class LaravelApiClient {
         const results = await Promise.all(promises);
 
         // Filter out null results (failed requests)
-        return results.filter((result): result is LaravelClassDetails => result !== null);
+        return results.filter((result): result is LaravelClassResponse => result !== null);
     }
 
     async getSettings(): Promise<{
@@ -363,11 +449,87 @@ class LaravelApiClient {
     async getStudentDetails(studentId: string | number): Promise<any> {
         return this.request<any>(`/api/students/${studentId}`);
     }
+
+    async updateClassSettings(classId: number, settings: any): Promise<any> {
+        // First, fetch the current class details to get all required fields
+        const classDetails = await this.getClassDetails(classId);
+
+        if (!classDetails?.data) {
+            throw new Error("Class not found");
+        }
+
+        const classData = classDetails.data;
+
+        // Prepare the update payload with all required fields
+        // Laravel requires ALL these fields even for a settings-only update
+        const updatePayload = {
+            subject_code: classData.class_information.subject_code,
+            faculty_id: classData.faculty_information.id,
+            academic_year: classData.class_information.academic_year,
+            semester: classData.class_information.semester,
+            schedule_id: classData.schedule_information.schedules[0]?.id?.toString() || "",
+            school_year: classData.class_information.school_year,
+            course_codes: classData.course_information.course_codes.join(","),
+            section: classData.class_information.section,
+            room_id: classData.schedule_information.schedules[0]?.room?.id?.toString() || "",
+            classification: classData.classification,
+            maximum_slots: classData.class_information.maximum_slots.toString(),
+            // For college classes, these SHS fields should be null, not empty strings
+            shs_track_id: classData.is_college ? null : (classData.shs_information?.track?.id || ""),
+            shs_strand_id: classData.is_college ? null : (classData.shs_information?.strand?.id || ""),
+            grade_level: classData.is_college ? null : (classData.shs_information?.grade_level || ""),
+            subject_id: classData.subject_information?.subject?.id?.toString() || "",
+            subject_ids: classData.subject_information?.subject?.id?.toString() || "",
+            settings: {
+                background_color: settings.background_color,
+                accent_color: settings.accent_color,
+                banner_image: settings.banner_image,
+                enable_announcements: settings.enable_announcements,
+                enable_grade_visibility: settings.enable_grade_visibility,
+                enable_attendance_tracking: settings.enable_attendance_tracking,
+                allow_late_submissions: settings.allow_late_submissions,
+                enable_discussion_board: settings.enable_discussion_board,
+                custom: [],
+            },
+        };
+
+        return this.request<any>(`/api/classes/${classId}`, {
+            method: "PUT",
+            body: JSON.stringify(updatePayload),
+        });
+    }
 }
 
 // Helper functions for data transformation
 export class LaravelApiHelpers {
-    static formatSchedule(classDetails: LaravelClassDetails): Array<{
+    static formatClassInfoForClassData(classDetails: ClassData): {
+        subjectCode: string;
+        subjectName: string;
+        section: string;
+        semester: string;
+        schoolYear: string;
+        gradeLevel: string;
+        track: string;
+        strand: string;
+        semesterFormatted: string;
+    } {
+        const classInfo = classDetails?.class_information || {};
+        const shsInfo = classDetails?.shs_information || {};
+
+        return {
+            subjectCode: classInfo.subject_code || "N/A",
+            subjectName: classDetails?.course_information?.formatted_course_codes || "N/A",
+            section: classInfo.section || "N/A",
+            semester: classInfo.semester || "N/A", // Raw semester value for filtering (e.g., "2")
+            semesterFormatted: classInfo.formatted_semester || "N/A", // Formatted for display (e.g., "2nd")
+            schoolYear: classInfo.school_year || "N/A", // Use school_year, not formatted_academic_year
+            gradeLevel: shsInfo.grade_level || "N/A",
+            track: shsInfo.track?.track_name || "N/A",
+            strand: shsInfo.strand?.strand_name || "N/A",
+        };
+    }
+
+    static formatSchedule(classDetails: LaravelClassResponse): Array<{
         day: string;
         startTime: string;
         endTime: string;
@@ -399,7 +561,7 @@ export class LaravelApiHelpers {
         }));
     }
 
-    static getClassScheduleDisplay(classDetails: LaravelClassDetails): {
+    static getClassScheduleDisplay(classDetails: LaravelClassResponse): {
         formatted: string;
         schedules: Array<{
             day: string;
@@ -422,12 +584,12 @@ export class LaravelApiHelpers {
         };
     }
 
-    static getClassEnrollmentCount(classDetails: LaravelClassDetails): number {
+    static getClassEnrollmentCount(classDetails: LaravelClassResponse): number {
         const enrolledStudents = classDetails?.data?.enrolled_students || [];
         return enrolledStudents.length;
     }
 
-    static getClassStatus(classDetails: LaravelClassDetails): { isFull: boolean; availableSlots: number } {
+    static getClassStatus(classDetails: LaravelClassResponse): { isFull: boolean; availableSlots: number } {
         const enrollmentCount = LaravelApiHelpers.getClassEnrollmentCount(classDetails);
         const maxSlots = classDetails?.data?.class_information?.maximum_slots || 0;
         const isFull = classDetails?.data?.class_information?.is_full || false;
@@ -445,7 +607,7 @@ export class LaravelApiHelpers {
         return facultyInfo.data.faculty_information.full_name;
     }
 
-    static formatClassInfo(classDetails: LaravelClassDetails): {
+    static formatClassInfo(classDetails: LaravelClassResponse): {
         subjectCode: string;
         subjectName: string;
         section: string;
@@ -454,6 +616,7 @@ export class LaravelApiHelpers {
         gradeLevel: string;
         track: string;
         strand: string;
+        semesterFormatted: string;
     } {
         const classInfo = classDetails?.data?.class_information || {};
         const shsInfo = classDetails?.data?.shs_information || {};
@@ -462,8 +625,9 @@ export class LaravelApiHelpers {
             subjectCode: classInfo.subject_code || "N/A",
             subjectName: classDetails?.data?.course_information?.formatted_course_codes || "N/A",
             section: classInfo.section || "N/A",
-            semester: classInfo.semester || classInfo.formatted_semester || "N/A", // Use raw semester for filtering
-            schoolYear: classInfo.formatted_academic_year || "N/A",
+            semester: classInfo.semester || "N/A", // Raw semester value for filtering (e.g., "2")
+            semesterFormatted: classInfo.formatted_semester || "N/A", // Formatted for display (e.g., "2nd")
+            schoolYear: classInfo.school_year || classInfo.formatted_academic_year || "N/A", // Prefer school_year
             gradeLevel: shsInfo.grade_level || "N/A",
             track: shsInfo.track?.track_name || "N/A",
             strand: shsInfo.strand?.strand_name || "N/A",

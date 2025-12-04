@@ -3,6 +3,7 @@ import { academicPeriods } from "./routes/academic-periods";
 import { auth } from "./routes/auth";
 import { chat } from "./routes/chat";
 import { classActions } from "./routes/class-actions";
+import { classSettings } from "./routes/class-settings";
 import { debug } from "./routes/debug";
 import { enrollment } from "./routes/enrollment";
 import { faculty } from "./routes/faculty";
@@ -24,6 +25,7 @@ export const app = new Elysia({ prefix: "/api" })
     .use(debug)
     .use(enrollment)
     .use(facultyClasses)
-    .use(classActions);
+    .use(classActions)
+    .use(classSettings);
 
 export type App = typeof app;
