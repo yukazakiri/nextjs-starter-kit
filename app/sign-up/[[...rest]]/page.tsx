@@ -11,13 +11,13 @@ const SignUp = dynamic(
         <div className="w-96 h-96 bg-gray-100 animate-pulse rounded-lg" />
       </div>
     ),
-  }
+  },
 );
 
 export default function SignUpPage() {
   return (
     <div className="flex items-center justify-center min-h-screen">
-      <SignUp />
+      <SignUp routing="hash" />
     </div>
   );
 }

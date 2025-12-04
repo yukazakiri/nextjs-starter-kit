@@ -1,23 +1,15 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  BookOpen,
-  Users,
-  Calendar,
-  FileText,
-  TrendingUp,
-  Clock,
-} from "lucide-react";
 import { useSemester } from "@/contexts/semester-context";
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
+import { DashboardHeader } from "./dashboard-header";
+import { StatsCards } from "./stats-cards";
+import { ScheduleTimeline } from "./schedule-timeline";
+import { QuickActions } from "./quick-actions";
+import { RecentActivity } from "./recent-activity";
+import { UpcomingDeadlines } from "./upcoming-deadlines";
+import { FacultyDashboardSkeleton } from "./skeletons/faculty-dashboard-skeleton";
 
 interface FacultyDashboardClientProps {
   facultyId: string;
@@ -74,7 +66,7 @@ export function FacultyDashboardClient({
   department,
 }: FacultyDashboardClientProps) {
   const { semester, schoolYear, isLoading: semesterLoading } = useSemester();
-  const { user, isLoaded: userLoaded } = useUser();
+  const { isLoaded: userLoaded } = useUser();
   const [facultyData, setFacultyData] = useState<FacultyData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [classCount, setClassCount] = useState(0);
@@ -144,191 +136,49 @@ export function FacultyDashboardClient({
 
   // Show loading state
   if (semesterLoading || isLoading || !userLoaded) {
-    return (
-      <div className="p-6 space-y-6">
-        <div className="space-y-2">
-          <div className="h-8 bg-muted rounded w-64 animate-pulse" />
-          <div className="h-4 bg-muted rounded w-96 animate-pulse" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="space-y-0 pb-2">
-                <div className="h-4 bg-muted rounded w-24 animate-pulse" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 bg-muted rounded w-16 animate-pulse mb-1" />
-                <div className="h-3 bg-muted rounded w-32 animate-pulse" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
+    return <FacultyDashboardSkeleton />;
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Welcome Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Welcome back, {firstName} {lastName}
-        </h1>
-        <p className="text-muted-foreground">
-          {department ? `Department of ${department}` : "Faculty Dashboard"} •{" "}
-          {semester === "1"
-            ? "1st Semester"
-            : semester === "2"
-            ? "2nd Semester"
-            : semester}{" "}
-          {schoolYear}
-        </p>
-      </div>
+    <div className="p-6 space-y-8 w-full">
+      <DashboardHeader
+        firstName={firstName}
+        lastName={lastName}
+        department={department}
+        semester={semester}
+        schoolYear={schoolYear}
+      />
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My Classes</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{classCount}</div>
-            <p className="text-xs text-muted-foreground">
-              {semester === "1" ? "1st" : semester === "2" ? "2nd" : semester} semester classes
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="col-span-1 md:col-span-2 lg:col-span-4">
+          <StatsCards
+            classCount={classCount}
+            totalStudents={totalStudents}
+            pendingTasks={0} // Placeholder
+            attendanceRate={0} // Placeholder
+            semester={semester}
+          />
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Students</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalStudents}</div>
-            <p className="text-xs text-muted-foreground">Enrolled this semester</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Tasks</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">
-              Assignments to grade
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Attendance Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0%</div>
-            <p className="text-xs text-muted-foreground">
-              Average across classes
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Today's Schedule */}
-        <Card className="col-span-1">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              <CardTitle>Today&apos;s Schedule</CardTitle>
-            </div>
-            <CardDescription>Your classes for today</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-muted-foreground text-center py-8">
-              No classes scheduled for today
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Recent Activities */}
-        <Card className="col-span-1">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              <CardTitle>Recent Activities</CardTitle>
-            </div>
-            <CardDescription>Latest updates</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-muted-foreground text-center py-8">
-              No recent activities
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Upcoming Deadlines */}
-        <Card className="col-span-1">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              <CardTitle>Upcoming Deadlines</CardTitle>
-            </div>
-            <CardDescription>Tasks due soon</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-muted-foreground text-center py-8">
-              No upcoming deadlines
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common faculty tasks</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <button className="p-4 border rounded-lg hover:bg-accent transition-colors text-left">
-              <BookOpen className="h-6 w-6 mb-2 text-primary" />
-              <h3 className="font-semibold">My Classes</h3>
-              <p className="text-sm text-muted-foreground">
-                View and manage classes
-              </p>
-            </button>
-
-            <button className="p-4 border rounded-lg hover:bg-accent transition-colors text-left">
-              <Users className="h-6 w-6 mb-2 text-primary" />
-              <h3 className="font-semibold">Students</h3>
-              <p className="text-sm text-muted-foreground">
-                View student records
-              </p>
-            </button>
-
-            <button className="p-4 border rounded-lg hover:bg-accent transition-colors text-left">
-              <FileText className="h-6 w-6 mb-2 text-primary" />
-              <h3 className="font-semibold">Grades</h3>
-              <p className="text-sm text-muted-foreground">
-                Submit and manage grades
-              </p>
-            </button>
-
-            <button className="p-4 border rounded-lg hover:bg-accent transition-colors text-left">
-              <Calendar className="h-6 w-6 mb-2 text-primary" />
-              <h3 className="font-semibold">Attendance</h3>
-              <p className="text-sm text-muted-foreground">Mark attendance</p>
-            </button>
+        {/* Bento Grid Layout */}
+        <div className="col-span-1 md:col-span-2 lg:col-span-3 grid gap-6 grid-rows-[auto_1fr]">
+          {/* Quick Actions - Full Width of Left Column */}
+          <div className="w-full">
+            <QuickActions />
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Activity & Deadlines - Side by Side on Large */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+            <RecentActivity />
+            <UpcomingDeadlines />
+          </div>
+        </div>
+
+        {/* Schedule - Right Column, Full Height */}
+        <div className="col-span-1 md:col-span-2 lg:col-span-1 h-full">
+          <ScheduleTimeline schedule={[]} />
+        </div>
+      </div>
     </div>
   );
 }

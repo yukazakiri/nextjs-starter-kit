@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import Chatbot from "./_components/chatbot";
 import { SemesterProvider } from "@/contexts/semester-context";
 import AcademicPeriodSelector from "./_components/academic-period-selector";
+import { ImpersonationBanner } from "@/components/impersonation-banner";
 
 export default async function DashboardLayout({
   children,
@@ -26,6 +27,7 @@ export default async function DashboardLayout({
             <div className="flex-1" />
             <AcademicPeriodSelector />
           </header>
+          <ImpersonationBanner />
           <div className="flex flex-1 flex-col gap-4 p-4">{children}</div>
           <Chatbot />
         </SidebarInset>

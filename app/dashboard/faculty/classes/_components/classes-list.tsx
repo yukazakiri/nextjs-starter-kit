@@ -13,7 +13,13 @@ interface ClassesListProps {
 
 export function ClassesList({ initialClasses }: ClassesListProps) {
     const [searchQuery, setSearchQuery] = useState("");
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
     const { semester, schoolYear } = useSemester();
+
+    const handleActionComplete = () => {
+        setRefreshTrigger(prev => prev + 1);
+        // Could also trigger a refetch of data here
+    };
 
     console.log(`🔍 Global Filter: semester="${semester}", schoolYear="${schoolYear}", totalClasses=${initialClasses.length}`);
 
@@ -68,7 +74,7 @@ export function ClassesList({ initialClasses }: ClassesListProps) {
             {/* Classes Grid */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {filteredClasses.map(classItem => (
-                    <ClassCard key={classItem.id} classItem={classItem} />
+                    <ClassCard key={classItem.id} classItem={classItem} onActionComplete={handleActionComplete} />
                 ))}
             </div>
 

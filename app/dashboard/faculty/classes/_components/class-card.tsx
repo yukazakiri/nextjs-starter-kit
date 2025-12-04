@@ -1,15 +1,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { BookOpen, Calendar, MoreVertical, Users } from "lucide-react";
+import { BookOpen, Calendar, Users } from "lucide-react";
 import Link from "next/link";
 import { getClassColor } from "../_utils/colors";
+import { ClassActionsDropdown } from "./class-actions-dropdown";
 
 export interface FacultyClass {
     id: number;
@@ -53,9 +48,10 @@ export interface FacultyClass {
 
 interface ClassCardProps {
     classItem: FacultyClass;
+    onActionComplete?: () => void;
 }
 
-export function ClassCard({ classItem }: ClassCardProps) {
+export function ClassCard({ classItem, onActionComplete }: ClassCardProps) {
     const theme = getClassColor(classItem.subjectCode);
 
     return (
@@ -71,22 +67,7 @@ export function ClassCard({ classItem }: ClassCardProps) {
                             {classItem.subjectCode}
                         </Badge>
 
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/20"
-                                >
-                                    <MoreVertical className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem>Edit Details</DropdownMenuItem>
-                                <DropdownMenuItem>View Students</DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive">Archive Class</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <ClassActionsDropdown classItem={classItem} onActionComplete={onActionComplete} />
                     </div>
 
                     <div className="flex justify-between items-end">
