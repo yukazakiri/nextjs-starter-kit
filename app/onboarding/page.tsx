@@ -111,11 +111,6 @@ export default function OnboardingPage() {
     if (isLoaded && user) {
       const userRole = user.publicMetadata?.role as UserRole;
 
-      console.log("[ONBOARDING] User metadata:", {
-        role: userRole,
-        metadata: user.publicMetadata,
-      });
-
       // If user has a role and completed onboarding, redirect to appropriate dashboard
       if (userRole === "student") {
         const hasRequiredInfo =
@@ -124,7 +119,6 @@ export default function OnboardingPage() {
           user.publicMetadata?.phone;
 
         if (hasRequiredInfo) {
-          console.log("[ONBOARDING] Student already completed onboarding");
           window.location.href = "/dashboard/student";
           return;
         }
@@ -137,7 +131,6 @@ export default function OnboardingPage() {
           user.publicMetadata?.facultyId && user.publicMetadata?.phone;
 
         if (hasRequiredInfo) {
-          console.log("[ONBOARDING] Faculty already completed onboarding");
           window.location.href = "/dashboard/faculty";
           return;
         }

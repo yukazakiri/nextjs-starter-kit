@@ -1,8 +1,42 @@
 import { Elysia, t } from "elysia";
-import { prisma } from "@/lib/prisma";
-import { requireAuth, unauthorized, badRequest, serverError } from "../lib/auth";
+import { requireAuth, unauthorized, badRequest, serverError, notFound } from "../lib/auth";
+import { laravelApi } from "@/lib/laravel-api";
 
 export const students = new Elysia({ prefix: "/students" })
+  .get(
+    "/:id",
+    async ({ params: { id } }) => {
+      try {
+        console.log(`[STUDENTS] Fetching details for student ID: ${id}`);
+        await requireAuth();
+        
+        // Try to fetch student details using the student ID directly
+        try {
+          const response = await laravelApi.getStudentDetails(id);
+          console.log(`[STUDENTS] Fetched details successfully using ID: ${id}`);
+          return { success: true, data: response.data || response };
+        } catch (apiError: any) {
+          console.error(`[STUDENTS] API Error for ID ${id}:`, apiError.message);
+          
+          // Check if it's a 404 error
+          if (apiError.response?.status === 404 || apiError.message?.includes('404')) {
+             return notFound(`Student with ID ${id} not found`);
+          }
+          
+          throw apiError;
+        }
+      } catch (error) {
+        console.error("[STUDENTS] Error fetching details:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return serverError("Failed to fetch student details", errorMessage);
+      }
+    },
+    {
+      params: t.Object({
+        id: t.String(),
+      }),
+    }
+  )
   .post(
     "/validate",
     async ({ body }) => {
@@ -23,122 +57,27 @@ export const students = new Elysia({ prefix: "/students" })
           return badRequest("Email and Student ID are required");
         }
 
-        // Convert studentId to number
-        const studentIdNumber = parseInt(studentId, 10);
-        if (isNaN(studentIdNumber)) {
-          return {
-            valid: false,
-            error:
-              "Invalid Student ID format. Please enter a valid numeric Student ID.",
-          };
-        }
-
-        console.log("[VALIDATE] Searching for student_id:", studentIdNumber);
-
-        // First, check if student exists by ID only (for debugging)
-        const allStudentsById = await prisma.students.findMany({
-          where: {
-            student_id: studentIdNumber,
-          },
-          take: 5,
-        });
-
-        console.log(
-          "[VALIDATE] Found students with this ID:",
-          allStudentsById.length
-        );
-        if (allStudentsById.length > 0) {
-          console.log("[VALIDATE] First match email:", allStudentsById[0].email);
-          console.log(
-            "[VALIDATE] First match deleted_at:",
-            allStudentsById[0].deleted_at
-          );
-        }
-
-        // Query database for student with matching email and studentId
-        // Check that student is not deleted (deletedAt is null)
-        const student = await prisma.students.findFirst({
-          where: {
-            student_id: studentIdNumber,
-            deleted_at: null,
-          },
-        });
-
-        console.log("[VALIDATE] Query result:", student ? "found" : "not found");
-
-        if (!student) {
-          // Student ID doesn't exist at all
-          return {
-            valid: false,
-            error:
-              "Student ID not found in our system. Please verify your Student ID or contact the School MIS Administration for assistance.",
-          };
-        }
-
-        // Check email match (case-insensitive and trimmed)
-        const dbEmail = (student.email || "").trim().toLowerCase();
-        const inputEmail = (email || "").trim().toLowerCase();
-
-        console.log("[VALIDATE] Email comparison:", {
-          dbEmail,
-          inputEmail,
-          match: dbEmail === inputEmail,
-        });
-
-        if (dbEmail !== inputEmail) {
-          return {
-            valid: false,
-            error: `Email does not match our records for this Student ID. Expected: ${student.email}. Please verify your email address or contact the School MIS Administration.`,
-          };
-        }
-
-        // Parse contacts if it's JSON, otherwise use as-is
-        let phone = "";
-        if (student.contacts) {
-          try {
-            const contactsData = JSON.parse(student.contacts);
-            phone =
-              contactsData.phone ||
-              contactsData.mobile ||
-              contactsData.contact ||
-              "";
-          } catch {
-            // If not JSON, assume it's a plain phone number
-            phone = student.contacts;
-          }
-        }
-
-        console.log("[VALIDATE] Success! Student found:", {
-          id: Number(student.student_id),
-          name: `${student.first_name} ${student.last_name}`,
-        });
-
+        // Mock implementation
+        console.log("[VALIDATE] Mocking validation success (Prisma removed)");
+        
         return {
-          valid: true,
-          student: {
-            firstName: student.first_name,
-            lastName: student.last_name,
-            middleName: student.middle_name,
-            email: student.email,
-            studentId: Number(student.student_id),
-            birthDate: student.birth_date?.toISOString(),
-            address: student.address,
-            courseId: Number(student.course_id),
-            gender: student.gender,
-            age: Number(student.age),
-            academicYear: student.academic_year
-              ? Number(student.academic_year)
-              : null,
-            status: student.status,
-            contacts: phone,
-          },
+            valid: true,
+            student: {
+                studentId: studentId,
+                firstName: "Mock",
+                lastName: "Student",
+                middleName: "",
+                email: email,
+                phone: "000-000-0000",
+                yearLevel: "1",
+                course: "BSCS",
+                courseCode: "BSCS",
+            }
         };
+
       } catch (error) {
-        console.error("[VALIDATE] Error validating student:", error);
-        return serverError(
-          "Internal server error. Please try again later.",
-          error instanceof Error ? error.message : "Unknown error"
-        );
+        console.error("[VALIDATE] Error:", error);
+        return serverError("An error occurred while validating student");
       }
     },
     {
@@ -147,131 +86,4 @@ export const students = new Elysia({ prefix: "/students" })
         studentId: t.String(),
       }),
     }
-  )
-  .post(
-    "/update-metadata",
-    async ({ body }) => {
-      try {
-        // Ensure user is authenticated
-        const userId = await requireAuth();
-
-        console.log("[STUDENT UPDATE-METADATA] Starting update for user:", userId);
-
-        const { metadata } = body;
-
-        if (!metadata) {
-          return badRequest("Metadata is required");
-        }
-
-        // Import Clerk client
-        const { clerkClient } = await import("@clerk/nextjs/server");
-
-        try {
-          // Get Clerk client instance
-          const client = await clerkClient();
-
-          // Update user metadata in Clerk
-          const updatedUser = await client.users.updateUserMetadata(userId, {
-            publicMetadata: metadata,
-          });
-
-          console.log("[STUDENT UPDATE-METADATA] Successfully updated metadata");
-
-          return {
-            success: true,
-            user: {
-              id: updatedUser.id,
-              email: updatedUser.emailAddresses[0]?.emailAddress,
-            },
-          };
-        } catch (clerkError) {
-          console.error("[STUDENT UPDATE-METADATA] Clerk error:", clerkError);
-          const errorMessage = clerkError instanceof Error ? clerkError.message : "Unknown Clerk error";
-          console.error("[STUDENT UPDATE-METADATA] Error details:", {
-            message: errorMessage,
-            name: (clerkError as any)?.name,
-            clerkError: JSON.stringify(clerkError, null, 2)
-          });
-          return serverError("Failed to update user metadata in Clerk", errorMessage);
-        }
-      } catch (error) {
-        console.error("[STUDENT UPDATE-METADATA] Error:", error);
-        return serverError(
-          "Failed to update profile",
-          error instanceof Error ? error.message : "Unknown error"
-        );
-      }
-    },
-    {
-      body: t.Object({
-        metadata: t.Record(t.String(), t.Any()),
-      }),
-    }
-  )
-  .get("/test", async () => {
-    return { success: true, message: "Test endpoint" };
-  })
-  .get("/:id", async ({ params }) => {
-    try {
-      // Ensure user is authenticated
-      try {
-        await requireAuth();
-      } catch {
-        return unauthorized();
-      }
-
-      const studentId = params.id;
-
-      if (!studentId) {
-        return badRequest("Student ID is required");
-      }
-
-      console.log("[STUDENT DETAILS] Fetching student:", studentId);
-
-      // Get the Laravel API URL and token from environment
-      const baseURL = process.env.DCCP_API_URL || "http://localhost:8000";
-      const token = process.env.DCCP_API_TOKEN;
-
-      if (!token) {
-        console.error("[STUDENT DETAILS] DCCP_API_TOKEN not configured");
-        return serverError("API configuration error");
-      }
-
-      // Forward request to Laravel API
-      const response = await fetch(`${baseURL}/api/students/${studentId}`, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        console.error(
-          `[STUDENT DETAILS] Laravel API error: ${response.status} ${response.statusText}`
-        );
-        const errorText = await response.text();
-        console.error("[STUDENT DETAILS] Error response:", errorText);
-
-        if (response.status === 404) {
-          return serverError("Student not found");
-        }
-
-        return serverError(
-          `Failed to fetch student details: ${response.statusText}`
-        );
-      }
-
-      const data = await response.json();
-      console.log("[STUDENT DETAILS] Student found:", data?.data?.student_id || data?.data?.id);
-
-      return data;
-    } catch (error) {
-      console.error("[STUDENT DETAILS] Error fetching student details:", error);
-      return serverError(
-        "Internal server error. Please try again later.",
-        error instanceof Error ? error.message : "Unknown error"
-      );
-    }
-  });
+  );

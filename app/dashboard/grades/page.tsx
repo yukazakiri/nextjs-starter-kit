@@ -75,8 +75,6 @@ export default function MyChecklistPage() {
 
   useEffect(() => {
     async function fetchChecklist() {
-      console.log("🔍 Checklist Page - Fetching for student:", studentId);
-
       if (!studentId) {
         console.warn("⚠️ No student ID available");
         setIsLoading(false);
@@ -86,19 +84,12 @@ export default function MyChecklistPage() {
       setIsLoading(true);
       try {
         const url = `/api/student/checklist?studentId=${studentId}`;
-        console.log("📡 Fetching from:", url);
 
         const response = await fetch(url);
         const data = await response.json();
 
-        console.log("📦 Response data:", data);
-
         if (data.success) {
-          console.log(
-            "✅ Successfully fetched checklist:",
-            data.checklist.length,
-          );
-          setChecklist(data.checklist);
+          setChecklist(data.checklist || []);
           setStatistics(data.statistics);
         } else {
           console.error("❌ Failed to fetch checklist:", data.error);

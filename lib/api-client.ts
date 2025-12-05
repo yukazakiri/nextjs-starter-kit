@@ -1,6 +1,10 @@
 import { treaty } from "@elysiajs/eden";
 import type { App } from "@/server";
 
-export const api = treaty<App>(
-  typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
+const client = treaty<App>(
+    typeof window === "undefined" 
+        ? `http://localhost:${process.env.PORT || 3000}` 
+        : window.location.origin
 );
+
+export const api = client.api;

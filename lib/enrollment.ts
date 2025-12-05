@@ -1,5 +1,3 @@
-import { prisma } from "./prisma";
-
 export interface EnrollmentStatus {
   isEnrolled: boolean;
   status?: string;
@@ -51,73 +49,20 @@ export async function getStudentEnrollmentStatus(
   currentSemester: string,
   currentCurriculumYear: string,
 ): Promise<EnrollmentStatus> {
-  try {
-    // Query the student_enrollment table for the current semester and curriculum year
-    const enrollment = await prisma.student_enrollment.findFirst({
-      where: {
-        student_id: studentId,
-        semester: BigInt(currentSemester),
-        school_year: currentCurriculumYear,
-        deleted_at: null, // Only get non-deleted enrollments
-      },
-      orderBy: {
-        created_at: "desc", // Get the most recent enrollment
-      },
-    });
-
-    if (!enrollment) {
-      return {
-        isEnrolled: false,
-      };
-    }
-
-    return {
-      isEnrolled: true,
-      status: enrollment.status,
-      semester: enrollment.semester,
-      academicYear: enrollment.academic_year,
-      schoolYear: enrollment.school_year,
-      courseId: enrollment.course_id,
-    };
-  } catch (error) {
-    console.error("Error fetching enrollment status:", error);
-    return {
-      isEnrolled: false,
-    };
-  }
+  // Mock implementation or replace with Laravel API call
+  console.log("getStudentEnrollmentStatus called with", { studentId, currentSemester, currentCurriculumYear });
+  return {
+    isEnrolled: false,
+  };
 }
 
 export async function getCurrentAcademicSettings() {
-  try {
-    const settings = await prisma.general_settings.findFirst({
-      select: {
-        semester: true,
-        curriculum_year: true,
-        school_starting_date: true,
-        school_ending_date: true,
-      },
-    });
-
-    const schoolYear = formatSchoolYear(
-      settings?.school_starting_date,
-      settings?.school_ending_date,
-    );
-
-    return {
-      semester: settings?.semester || "1",
-      curriculumYear: settings?.curriculum_year || "",
-      schoolYear,
-      schoolStartingDate: settings?.school_starting_date || "",
-      schoolEndingDate: settings?.school_ending_date || "",
+   // Mock implementation or replace with Laravel API call
+   return {
+      semester: "1", 
+      curriculum_year: "2024-2025",
+      schoolYear: "2024-2025",
+      school_starting_date: "2024-08-01",
+      school_ending_date: "2025-05-31"
     };
-  } catch (error) {
-    console.error("Error fetching academic settings:", error);
-    return {
-      semester: "1",
-      curriculumYear: "",
-      schoolYear: "",
-      schoolStartingDate: "",
-      schoolEndingDate: "",
-    };
-  }
 }

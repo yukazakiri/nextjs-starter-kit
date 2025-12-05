@@ -1,5 +1,5 @@
 // Laravel API client for Sanctum authentication
-const LARAVEL_API_BASE_URL = process.env.DCCP_API_URL || "http://localhost:8000";
+const LARAVEL_API_BASE_URL = process.env.DCCP_API_URL || "https://admin.dccp.edu.ph";
 const LARAVEL_API_TOKEN = process.env.DCCP_API_TOKEN || "26|LAwmlRhI27abHoZKwOUwXDbLZssqY2uoHlk7smInb7c0a62b";
 
 interface NextFetchRequestConfig {
@@ -167,6 +167,61 @@ export interface LaravelClassListResponse {
     };
 }
 
+export interface ClassPostAttachment {
+    id?: string;
+    name: string;
+    url: string;
+    type: string;
+    size?: number;
+}
+
+export interface ClassPost {
+    id: number;
+    class_id: number;
+    title: string;
+    content: string;
+    type: "assignment" | "announcement" | "material" | "question";
+    type_name: string;
+    attachments: (ClassPostAttachment | null)[];
+    class?: {
+        id: string;
+        section: string;
+        subject_code: string;
+    };
+    created_at: string;
+    updated_at: string;
+    created_at_formatted: string;
+    updated_at_formatted: string;
+    author?: {
+        name: string;
+        avatar_url?: string;
+    };
+}
+
+export interface ClassPostListResponse {
+    data: ClassPost[];
+    links?: {
+        first: string;
+        last: string;
+        prev: string;
+        next: string;
+    };
+    meta?: {
+        current_page: number;
+        from: number;
+        last_page: number;
+        links: Array<{
+            url: string | null;
+            label: string;
+            active: boolean;
+        }>;
+        path: string;
+        per_page: number;
+        to: number;
+        total: number;
+    };
+}
+
 // --- End New Interfaces ---
 
 // Keeping some old interfaces if they are used elsewhere or for compatibility
@@ -269,7 +324,6 @@ class LaravelApiClient {
         if (cached) {
             const isExpired = Date.now() - cached.timestamp > this.CACHE_TTL;
             if (!isExpired) {
-                console.log(`[CACHE] Hit for ${key}`);
                 return cached.data as T;
             }
             this.cache.delete(key);
@@ -296,13 +350,6 @@ class LaravelApiClient {
             ...options.headers,
         };
 
-        console.log(`[LARAVEL API] ${options.method || "GET"} ${url}`, {
-            headers,
-            body: options.body,
-            next: options.next,
-            cache: options.cache,
-        });
-
         try {
             const response = await fetch(url, {
                 ...options,
@@ -324,7 +371,6 @@ class LaravelApiClient {
             }
 
             const data = await response.json();
-            console.log(`[LARAVEL API] Response from ${endpoint}:`, data);
 
             return data;
         } catch (error) {
@@ -497,6 +543,73 @@ class LaravelApiClient {
             method: "PUT",
             body: JSON.stringify(updatePayload),
         });
+    }
+
+    async getClassPosts(classId: string): Promise<ClassPostListResponse> {
+        return this.request<ClassPostListResponse>(`/api/class-posts/class/${classId}`);
+    }
+
+    async createClassPost(postData: FormData): Promise<any> {
+        // We need to handle FormData manually because our request wrapper sets Content-Type to application/json by default
+        // and we need to let the browser/fetch set the boundary for multipart/form-data
+        
+        const url = `${this.baseURL}/api/class-posts`;
+        
+        const headers: HeadersInit = {
+            Accept: "application/json",
+            Authorization: `Bearer ${this.token}`,
+            // Do NOT set Content-Type here, let fetch set it with boundary
+        };
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers,
+            body: postData,
+        });
+
+        if (!response.ok) {
+             const errorText = await response.text();
+             console.error(`[LARAVEL API] Error ${response.status}: ${response.statusText}`, errorText);
+             throw new Error(`Laravel API error: ${response.status} ${response.statusText}`);
+        }
+
+        return await response.json();
+    }
+
+    async deleteClassPost(postId: string | number): Promise<any> {
+        return this.request(`/api/class-posts/${postId}`, {
+            method: "DELETE",
+        });
+    }
+
+    async updateClassPost(postId: string | number, data: any): Promise<any> {
+        return this.request(`/api/class-posts/${postId}`, {
+            method: "PUT",
+            body: JSON.stringify(data),
+        });
+    }
+    
+    async addClassPostAttachment(postId: string | number, attachmentData: FormData): Promise<any> {
+        const url = `${this.baseURL}/api/class-posts/${postId}/attachments`;
+        
+        const headers: HeadersInit = {
+            Accept: "application/json",
+            Authorization: `Bearer ${this.token}`,
+        };
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers,
+            body: attachmentData,
+        });
+
+        if (!response.ok) {
+             const errorText = await response.text();
+             console.error(`[LARAVEL API] Error ${response.status}: ${response.statusText}`, errorText);
+             throw new Error(`Laravel API error: ${response.status} ${response.statusText}`);
+        }
+
+        return await response.json();
     }
 }
 

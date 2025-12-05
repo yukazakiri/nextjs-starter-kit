@@ -145,7 +145,6 @@ export function GradesTab() {
           delete newState[key];
           return newState;
         });
-        console.log(`${term} grade saved`);
       } else {
         const error = await response.json();
         console.error(error.error || "Failed to save grade");
@@ -205,7 +204,6 @@ export function GradesTab() {
           const gradesData = await gradesResponse.json();
           setGrades(gradesData.grades || []);
         }
-        console.log(`${term} grades ${data.submitted ? "submitted" : "reopened"}`);
       } else {
         const error = await response.json();
         console.error(error.error || "Failed to finalize grades");

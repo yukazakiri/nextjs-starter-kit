@@ -25,8 +25,9 @@ async function getClassDetails(classId: string) {
       ? data.subject_information.filter(s => s !== null)
       : [];
 
-    // Handle enrolled students - extract student object from each enrollment
-    const enrolledStudentsList = data.enrolled_students?.map(e => e.student) || [];
+    // Handle enrolled students - pass the full enrollment object to preserve structure and IDs
+    // The PeopleTab component handles the extraction of student data
+    const enrolledStudentsList = data.enrolled_students || [];
 
     // Handle schedule
     const schedule = data.schedule_information?.schedules || [];

@@ -27,7 +27,7 @@ export function AttendanceTab({ classId, enrolledStudents = [] }: AttendanceTabP
 
   const handleSave = () => {
     // TODO: Save attendance records to API
-    console.log("Saving attendance:", { classId, date: selectedDate, records: attendanceRecords });
+    // console.log("Saving attendance:", { classId, date: selectedDate, records: attendanceRecords });
     alert("Attendance saved successfully!");
   };
 

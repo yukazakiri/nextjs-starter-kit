@@ -62,14 +62,6 @@ export function ClassSettingsModal({ classItem, open, onOpenChange, onSettingsUp
         setIsLoading(true);
 
         try {
-            console.log("[CLASS SETTINGS MODAL] Submitting settings:", {
-                classId: classItem.id,
-                settings: {
-                    ...formData.visual,
-                    ...formData.features,
-                },
-            });
-
             const response = await fetch(`/api/classes/${classItem.id}`, {
                 method: "PATCH",
                 headers: {
@@ -84,8 +76,6 @@ export function ClassSettingsModal({ classItem, open, onOpenChange, onSettingsUp
             });
 
             const result = await response.json();
-
-            console.log("[CLASS SETTINGS MODAL] Response:", result);
 
             if (!response.ok) {
                 throw new Error(result.message || result.error || "Failed to update class settings");

@@ -59,7 +59,7 @@ export async function FacultyDashboardContent({
 
     classCount = filteredClasses.length;
 
-    console.log(`📊 Faculty Dashboard - Classes for ${currentSemester} semester: ${classCount}`);
+    // console.log(`📊 Faculty Dashboard - Classes for ${currentSemester} semester: ${classCount}`);
 
     // Get enrollment count for current semester classes
     totalStudents = filteredClasses.reduce((sum, cls) => sum + (parseInt(cls.student_count) || 0), 0);

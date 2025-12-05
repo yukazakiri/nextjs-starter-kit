@@ -2,7 +2,7 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -36,28 +36,34 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import {
+  BookOpen,
+  Calendar,
+  FileDown,
+  GraduationCap,
   Mail,
+  MapPin,
   MoreVertical,
   Phone,
   Search,
   SortAsc,
   SortDesc,
+  User,
   UserCheck,
   UserPlus,
   Users,
-  BookOpen,
-  FileDown,
   UserX,
-  User,
-  GraduationCap,
-  MapPin,
-  Calendar,
 } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { useState, useMemo } from "react";
+import { api } from "@/lib/api-client";
 import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Person {
   id: string | number;
@@ -72,6 +78,8 @@ interface Person {
     code: string;
     name: string;
   };
+  databaseId?: number | string;
+  apiStudentId?: string | number;
 }
 
 interface StudentDetails {
@@ -97,6 +105,12 @@ interface StudentDetails {
   academic_information: {
     academic_year: number;
     formatted_academic_year: string;
+    course: {
+      id: string;
+      code: string;
+      name: string;
+      description: string;
+    };
     status: string;
   };
   address_information: {
@@ -129,6 +143,36 @@ interface StudentDetails {
     senior_high_graduate_year: string | null;
     senior_high_address: string | null;
   };
+  clearance_information: {
+    current_clearance: {
+      status: string;
+      is_cleared: boolean;
+      cleared_by: string | null;
+      cleared_at: string | null;
+      remarks: string | null;
+      academic_year: string;
+      semester: string;
+      formatted_semester: string;
+    };
+    previous_clearance: {
+      status: string;
+      allowed: string;
+      message: string;
+      academic_period: string;
+      academic_year: string;
+      semester: string;
+    };
+    clearance_history: Array<{
+      academic_year: string;
+      semester: number;
+      formatted_semester: string;
+      is_cleared: boolean;
+      status: string;
+      cleared_by: string | null;
+      cleared_at: string | null;
+      remarks: string | null;
+    }>;
+  };
   tuition_information: {
     total_tuition: string | null;
     lecture_fees: string | null;
@@ -142,6 +186,49 @@ interface StudentDetails {
     semester: string | null;
     academic_year: string | null;
   };
+  current_enrolled_subjects: Array<{
+    subject_code: string;
+    subject_title: string;
+    units: string;
+    section: string;
+    grade: number;
+    academic_year: string;
+    semester: number;
+  }>;
+  documents: {
+    picture_1x1: string | null;
+    transcript_records: string | null;
+    transfer_credentials: string | null;
+    good_moral_cert: string | null;
+    form_137: string | null;
+    form_138: string | null;
+    birth_certificate: string | null;
+  };
+  demographic_information: {
+    ethnicity: string | null;
+    is_indigenous_person: boolean;
+    indigenous_group: string | null;
+  };
+  scholarship_information: {
+    scholarship_type: string | null;
+    scholarship_details: string | null;
+  };
+  employment_information: {
+    employment_status: string | null;
+    employer_name: string | null;
+    job_position: string | null;
+    employment_date: string | null;
+    employed_by_institution: boolean;
+  };
+  attrition_information: {
+    withdrawal_date: string | null;
+    withdrawal_reason: string | null;
+    attrition_category: string | null;
+    dropout_date: string | null;
+  };
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
 }
 
 interface PeopleTabProps {
@@ -159,42 +246,63 @@ export function PeopleTab({ enrolledStudents = [] }: PeopleTabProps) {
   const [isLoadingStudent, setIsLoadingStudent] = useState(false);
 
   // Transform enrolled students to match Person interface
-  const students: Person[] = enrolledStudents.map((s: any) => ({
-    id: s.id || Math.random().toString(36).substr(2, 9),
-    name: `${s.first_name || ""} ${s.last_name || ""}`.trim() || s.student_id || "Unknown Student",
-    email: s.email,
-    student_id: s.student_id,
-    avatar: s.avatar_url,
-    role: "student" as const,
-    status: droppedStudents.has(s.id) ? "dropped" : "active",
-    course: s.academic_information?.course ? {
-      id: s.academic_information.course.id,
-      code: s.academic_information.course.code,
-      name: s.academic_information.course.name,
-    } : undefined,
-  }));
+  const students: Person[] = enrolledStudents.map((s: any) => {
+    // Check if s is an EnrolledStudent (has nested student property) or a direct Student object
+    const isEnrolledStudent = s.student && typeof s.student === 'object';
+    const studentData = isEnrolledStudent ? s.student : s;
+    const apiStudentId = studentData.student_id;
+    const databaseId = studentData.id || (isEnrolledStudent ? s.student_id : s.id);
+    const schoolId = studentData.student_id;
+
+    return {
+      id: s.id || Math.random().toString(36).substr(2, 9),
+      name: `${studentData.first_name || ""} ${studentData.last_name || ""}`.trim() || schoolId || "Unknown Student",
+      email: studentData.email,
+      student_id: schoolId,
+      avatar: studentData.avatar_url || studentData.avatar,
+      role: "student" as const,
+      status: droppedStudents.has(s.id) ? "dropped" : "active",
+      course: studentData.academic_information?.course ? {
+        id: studentData.academic_information.course.id,
+        code: studentData.academic_information.course.code,
+        name: studentData.academic_information.course.name,
+      } : undefined,
+      databaseId: databaseId,
+      apiStudentId: apiStudentId // Use this for API calls
+    };
+  });
 
   // Fetch student details
   const fetchStudentDetails = async (studentId: string | number) => {
+    if (!studentId) {
+      console.error("Invalid student ID:", studentId);
+      return;
+    }
+
+    // Open sheet immediately to show loading state
+    setIsSheetOpen(true);
     setIsLoadingStudent(true);
+    
     try {
-      // Call our Elysia backend route which proxies to Laravel API
-      const response = await fetch(`/api/students/${studentId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.statusText}`);
+      const safeId = String(studentId).trim();
+      const { data, error } = await api.students({ id: safeId }).get();
+      if (error) {
+        console.error("Failed to fetch student details:", typeof error === "object" ? JSON.stringify(error) : error);
+        const v: any = (error as any);
+        const message =
+          (v?.value?.error && typeof v.value.error === "string" ? v.value.error : undefined) ??
+          (v?.value?.message && typeof v.value.message === "string" ? v.value.message : undefined) ??
+          (v?.message && typeof v.message === "string" ? v.message : undefined) ??
+          (typeof v === "string" ? v : undefined) ??
+          "Failed to fetch student details";
+        throw new Error(message);
       }
-
-      const data = await response.json();
-      setSelectedStudent(data.data);
-      setIsSheetOpen(true);
+      if (data) {
+        // @ts-ignore
+        setSelectedStudent(data.data);
+      }
     } catch (error) {
-      console.error('Error fetching student details:', error);
+      console.error("Error fetching student details:", typeof error === "object" ? JSON.stringify(error) : error);
     } finally {
       setIsLoadingStudent(false);
     }
@@ -536,15 +644,17 @@ export function PeopleTab({ enrolledStudents = [] }: PeopleTabProps) {
                         {index + 1}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-3">
+                        <div 
+                          className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => fetchStudentDetails(student.apiStudentId || student.student_id || student.id)}
+                        >
                           <Avatar className="h-10 w-10">
                             <AvatarImage src={student.avatar} />
-                            <AvatarFallback className="bg-primary/10 text-primary">
-                              {getInitials(student.name)}
-                            </AvatarFallback>
+                            <AvatarFallback>{student.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                           </Avatar>
-                          <div>
-                            <p className="font-medium">{student.name}</p>
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">{student.name}</span>
+                            <span className="text-xs text-muted-foreground">{student.email}</span>
                           </div>
                         </div>
                       </TableCell>
@@ -593,7 +703,7 @@ export function PeopleTab({ enrolledStudents = [] }: PeopleTabProps) {
                                 <Mail className="h-4 w-4 mr-2" />
                                 Send Email
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => fetchStudentDetails(student.id)}>
+                              <DropdownMenuItem onClick={() => fetchStudentDetails(student.apiStudentId || student.student_id || student.id)}>
                                 <Phone className="h-4 w-4 mr-2" />
                                 View Profile
                               </DropdownMenuItem>
@@ -629,181 +739,292 @@ export function PeopleTab({ enrolledStudents = [] }: PeopleTabProps) {
 
       {/* Student Details Sheet */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent className="w-full md:max-w-3xl overflow-y-auto">
-          <SheetHeader className="space-y-4">
-            <div className="flex items-start gap-4">
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <Avatar className="h-16 w-16">
-                  <AvatarFallback className="bg-primary/20 text-primary text-2xl">
-                    {selectedStudent ? getInitials(selectedStudent.basic_information.full_name) : "S"}
-                  </AvatarFallback>
-                </Avatar>
-              </div>
-              <div className="flex-1">
-                <SheetTitle className="text-2xl leading-tight">
-                  {selectedStudent?.basic_information.full_name || "Student Name"}
-                </SheetTitle>
-                <div className="flex items-center gap-3 text-sm mt-1">
-                  <span className="flex items-center gap-1">
-                    <GraduationCap className="h-4 w-4" />
-                    {selectedStudent?.student_id || "N/A"}
-                  </span>
-                  <span className="text-muted-foreground">•</span>
-                  <span className="capitalize">{selectedStudent?.academic_information.status || "N/A"}</span>
-                  <span className="text-muted-foreground">•</span>
-                  <span>{selectedStudent?.academic_information.formatted_academic_year || "N/A"}</span>
-                </div>
-              </div>
-            </div>
+      <SheetContent className="w-full md:max-w-3xl p-0 flex flex-col h-full">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Student Details</SheetTitle>
           </SheetHeader>
+          <div className="p-6 border-b bg-gradient-to-r from-primary/10 via-violet-100 to-teal-100">
+            <div className="flex items-start gap-4">
+              {isLoadingStudent ? (
+                <>
+                  <Skeleton className="h-16 w-16 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-6 w-48" />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Skeleton className="h-6 w-28 rounded-full" />
+                      <Skeleton className="h-6 w-24 rounded-full" />
+                      <Skeleton className="h-6 w-32 rounded-full" />
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Skeleton className="h-9 w-24" />
+                      <Skeleton className="h-9 w-24" />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Avatar className="h-16 w-16 ring-2 ring-primary/30">
+                      <AvatarFallback className="bg-primary/20 text-primary text-2xl">
+                        {selectedStudent ? getInitials(selectedStudent.basic_information.full_name) : "S"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-2xl font-bold leading-tight">
+                      {selectedStudent?.basic_information.full_name || "Student Name"}
+                    </h2>
+                    <div className="flex flex-wrap items-center gap-2 text-sm mt-2">
+                      <Badge variant="outline" className="flex items-center gap-1">
+                        <GraduationCap className="h-4 w-4" />
+                        {String(selectedStudent?.student_id || "N/A")}
+                      </Badge>
+                      <Badge variant="default" className="capitalize">
+                        {selectedStudent?.academic_information.status || "N/A"}
+                      </Badge>
+                      <Badge variant="outline">
+                        {selectedStudent?.academic_information.formatted_academic_year || "N/A"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 mt-3">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button onClick={() => selectedStudent?.basic_information.email && window.open(`mailto:${selectedStudent.basic_information.email}`)}>
+                              <Mail className="h-4 w-4 mr-2" />
+                              Email
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Open email client</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" onClick={() => navigator.clipboard.writeText(String(selectedStudent?.student_id || ""))}>
+                              <User className="h-4 w-4 mr-2" />
+                              Copy ID
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Copy student ID</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
 
           {isLoadingStudent ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            </div>
+            <ScrollArea className="flex-1">
+              <div className="p-6 pt-4 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <Card>
+                    <CardContent className="p-4 space-y-2">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-6 w-32" />
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 space-y-2">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-6 w-40" />
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 space-y-2">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-6 w-28" />
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 space-y-2">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-6 w-24" />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <Skeleton className="h-5 w-32" />
+                  </CardHeader>
+                  <CardContent className="grid md:grid-cols-2 gap-y-4 gap-x-8">
+                    <Skeleton className="h-5 w-48" />
+                    <Skeleton className="h-5 w-32" />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <Skeleton className="h-5 w-28" />
+                  </CardHeader>
+                  <CardContent className="grid md:grid-cols-3 gap-y-4 gap-x-8">
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-6 w-24 rounded-full" />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <Skeleton className="h-5 w-24" />
+                  </CardHeader>
+                  <CardContent className="grid md:grid-cols-2 gap-y-4 gap-x-8">
+                    <Skeleton className="h-5 w-64" />
+                    <Skeleton className="h-5 w-40" />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <Skeleton className="h-5 w-24" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-12 w-full" />
+                  </CardContent>
+                </Card>
+              </div>
+            </ScrollArea>
           ) : selectedStudent ? (
-            <div className="mt-6 space-y-8">
-              {/* Quick Stats Row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="bg-primary/5 p-4 rounded-lg border border-primary/10">
-                  <p className="text-xs text-muted-foreground mb-1">Age</p>
-                  <p className="text-lg font-semibold">{selectedStudent.basic_information.age}</p>
+            <ScrollArea className="flex-1">
+              <div className="p-6 pt-4 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Student ID</p>
+                      <p className="text-lg font-semibold">{String(selectedStudent.student_id || "N/A")}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Year Level</p>
+                      <p className="text-sm font-semibold truncate">{selectedStudent.academic_information.formatted_academic_year}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Status</p>
+                      <p className="text-lg font-semibold capitalize">{selectedStudent.academic_information.status}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Gender</p>
+                      <p className="text-lg font-semibold capitalize">{selectedStudent.basic_information.gender}</p>
+                    </CardContent>
+                  </Card>
                 </div>
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">Gender</p>
-                  <p className="text-lg font-semibold">{selectedStudent.basic_information.gender}</p>
-                </div>
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">Status</p>
-                  <p className="text-lg font-semibold capitalize">{selectedStudent.academic_information.status}</p>
-                </div>
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">Academic Year</p>
-                  <p className="text-sm font-semibold">{selectedStudent.academic_information.formatted_academic_year}</p>
-                </div>
-              </div>
 
-              {/* Personal Details */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <User className="h-4 w-4 text-primary" />
-                  </div>
-                  <h3 className="text-lg font-semibold">Personal Details</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-3 p-4 rounded-lg border bg-card">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground">Email</p>
-                      <p className="font-medium text-sm">{selectedStudent.basic_information.email || "N/A"}</p>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <User className="h-5 w-5 text-primary" />
+                      Identity
+                    </h3>
+                  </CardHeader>
+                  <CardContent className="grid md:grid-cols-2 gap-y-4 gap-x-8">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Full Name</p>
+                      <p className="font-medium">{selectedStudent.basic_information.full_name}</p>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground">Phone</p>
-                      <p className="font-medium text-sm">{selectedStudent.basic_information.phone || "N/A"}</p>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Student ID</p>
+                      <p className="font-medium">{String(selectedStudent.student_id || "N/A")}</p>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground">Birth Date</p>
-                      <p className="font-medium text-sm">{selectedStudent.basic_information.birth_date}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-3 p-4 rounded-lg border bg-card">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground">Civil Status</p>
-                      <p className="font-medium text-sm">{selectedStudent.basic_information.civil_status || "N/A"}</p>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground">Nationality</p>
-                      <p className="font-medium text-sm">{selectedStudent.basic_information.nationality || "N/A"}</p>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground">Religion</p>
-                      <p className="font-medium text-sm">{selectedStudent.basic_information.religion || "N/A"}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                  </CardContent>
+                </Card>
 
-              {/* Contact Information */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-                    <Phone className="h-4 w-4 text-blue-500" />
-                  </div>
-                  <h3 className="text-lg font-semibold">Contact Information</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-lg border bg-card">
-                    <p className="text-xs text-muted-foreground mb-3">Personal Contacts</p>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Personal Contact</p>
-                        <p className="font-medium">{selectedStudent.contact_information.personal_contact || "N/A"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Facebook</p>
-                        <p className="font-medium text-sm">{selectedStudent.contact_information.facebook_contact || "N/A"}</p>
-                      </div>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <GraduationCap className="h-5 w-5 text-primary" />
+                      Academic
+                    </h3>
+                  </CardHeader>
+                  <CardContent className="grid md:grid-cols-3 gap-y-4 gap-x-8">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Course</p>
+                      <p className="font-medium">{selectedStudent.academic_information.course?.code || "N/A"}</p>
+                      <p className="text-sm text-muted-foreground">{selectedStudent.academic_information.course?.name || ""}</p>
                     </div>
-                  </div>
-                  <div className="p-4 rounded-lg border bg-card">
-                    <p className="text-xs text-muted-foreground mb-3">Emergency Contact</p>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Name</p>
-                        <p className="font-medium">{selectedStudent.contact_information.emergency_contact_name || "N/A"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Phone</p>
-                        <p className="font-medium text-sm">{selectedStudent.contact_information.emergency_contact_phone || "N/A"}</p>
-                      </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Year Level</p>
+                      <p className="font-medium">{selectedStudent.academic_information.formatted_academic_year}</p>
                     </div>
-                  </div>
-                </div>
-              </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Status</p>
+                      <Badge variant="outline" className="capitalize">{selectedStudent.academic_information.status}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
 
-              {/* Address Information */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                    <MapPin className="h-4 w-4 text-green-500" />
-                  </div>
-                  <h3 className="text-lg font-semibold">Address Information</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="p-4 rounded-lg border bg-card">
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-2">Current Address</p>
-                        <p className="font-medium leading-relaxed">
-                          {selectedStudent.address_information.current_address || "N/A"}
-                        </p>
-                      </div>
-                      {selectedStudent.address_information.permanent_address !== selectedStudent.address_information.current_address && (
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-2">Permanent Address</p>
-                          <p className="font-medium leading-relaxed">
-                            {selectedStudent.address_information.permanent_address || "N/A"}
-                          </p>
-                        </div>
-                      )}
-                      <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                        <div>
-                          <p className="text-xs text-muted-foreground">City</p>
-                          <p className="font-medium">{selectedStudent.address_information.city_of_origin || "N/A"}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Province</p>
-                          <p className="font-medium">{selectedStudent.address_information.province_of_origin || "N/A"}</p>
-                        </div>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <Mail className="h-5 w-5 text-primary" />
+                      Contact
+                    </h3>
+                  </CardHeader>
+                  <CardContent className="grid md:grid-cols-2 gap-y-4 gap-x-8">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Email Address</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{selectedStudent.basic_information.email}</p>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(String(selectedStudent.basic_information.email || ""))}>Copy</Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Copy email</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     </div>
-                  </div>
-                </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Contact Number</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{selectedStudent.basic_information.phone || "N/A"}</p>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(String(selectedStudent.basic_information.phone || ""))}>Copy</Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Copy phone</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <MapPin className="h-5 w-5 text-primary" />
+                      Address
+                    </h3>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-1">Current Address</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium bg-muted/30 p-3 rounded-md border flex-1">{selectedStudent.address_information.current_address || "N/A"}</p>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(String(selectedStudent.address_information.current_address || ""))}>Copy</Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Copy address</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-            </div>
+            </ScrollArea>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              No student details available
+            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+              <Users className="h-12 w-12 mb-4 opacity-20" />
+              <p>No student details selected</p>
             </div>
           )}
         </SheetContent>

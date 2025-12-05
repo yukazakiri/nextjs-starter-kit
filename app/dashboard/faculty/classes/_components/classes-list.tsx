@@ -21,8 +21,6 @@ export function ClassesList({ initialClasses }: ClassesListProps) {
         // Could also trigger a refetch of data here
     };
 
-    console.log(`🔍 Global Filter: semester="${semester}", schoolYear="${schoolYear}", totalClasses=${initialClasses.length}`);
-
     const filteredClasses = initialClasses.filter(classItem => {
         const matchesSearch =
             classItem.subjectName.toLowerCase().includes(searchQuery.toLowerCase()) ||

@@ -79,7 +79,7 @@ export function FacultyDashboardClient({
     async function fetchFacultyData() {
       try {
         setIsLoading(true);
-        console.log(`🔄 Fetching faculty data for ${facultyId}, semester: ${semester}, year: ${schoolYear}`);
+        // console.log(`🔄 Fetching faculty data for ${facultyId}, semester: ${semester}, year: ${schoolYear}`);
 
         const response = await fetch(`/api/faculty/${facultyId}`, {
           headers: {
@@ -92,7 +92,7 @@ export function FacultyDashboardClient({
         }
 
         const data = await response.json();
-        console.log(`✅ Fetched faculty data:`, data);
+        // console.log(`✅ Fetched faculty data:`, data);
 
         if (data?.data) {
           setFacultyData(data.data);
@@ -126,9 +126,9 @@ export function FacultyDashboardClient({
       0
     );
 
-    console.log(
-      `🔄 Dashboard Filter Changed - Semester ${semester}, Year ${schoolYear}: showing ${classCount} classes, ${totalStudents} students`
-    );
+    // console.log(
+    //   `🔄 Dashboard Filter Changed - Semester ${semester}, Year ${schoolYear}: showing ${classCount} classes, ${totalStudents} students`
+    // );
 
     setClassCount(classCount);
     setTotalStudents(totalStudents);

@@ -23,32 +23,32 @@ export function StudentDashboardWrapper({
   useEffect(() => {
     async function fetchEnrollmentStatus() {
       if (!semester || !schoolYear) {
-        console.log("⏳ Waiting for semester/schoolYear...", {
-          semester,
-          schoolYear,
-        });
+        // console.log("⏳ Waiting for semester/schoolYear...", {
+        //   semester,
+        //   schoolYear,
+        // });
         setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
-      console.log("🔍 Fetching enrollment status:", {
-        studentId,
-        semester,
-        schoolYear,
-      });
+      // console.log("🔍 Fetching enrollment status:", {
+      //   studentId,
+      //   semester,
+      //   schoolYear,
+      // });
 
       try {
         const url = `/api/enrollment-status?studentId=${studentId}&semester=${semester}&schoolYear=${encodeURIComponent(schoolYear)}`;
-        console.log("📡 API URL:", url);
+        // console.log("📡 API URL:", url);
 
         const response = await fetch(url);
 
-        console.log(
-          "📡 Response status:",
-          response.status,
-          response.statusText,
-        );
+        // console.log(
+        //   "📡 Response status:",
+        //   response.status,
+        //   response.statusText,
+        // );
 
         if (!response.ok) {
           console.error("❌ HTTP error:", response.status, response.statusText);
@@ -60,10 +60,10 @@ export function StudentDashboardWrapper({
 
         const data = await response.json();
 
-        console.log("📦 API Response:", data);
+        // console.log("📦 API Response:", data);
 
         if (data.success) {
-          console.log("✅ Enrollment status:", data.enrollmentStatus);
+          // console.log("✅ Enrollment status:", data.enrollmentStatus);
           setEnrollmentStatus(data.enrollmentStatus);
         } else {
           console.error("❌ API returned success: false", data);

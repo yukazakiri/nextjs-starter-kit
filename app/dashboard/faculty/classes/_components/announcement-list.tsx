@@ -32,31 +32,28 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useUser } from "@clerk/nextjs";
+import { uploadFileToR2 } from "@/app/actions/upload";
+import { getClassPostsAction, createClassPostAction, deleteClassPostAction, updateClassPostAction, uploadPostAttachmentAction } from "@/app/actions/class-posts";
+import { ClassPost, ClassPostAttachment } from "@/lib/laravel-api";
+import { toast } from "sonner";
 
 interface AnnouncementListProps {
   classId: string;
 }
 
-interface Announcement {
-  id: string;
-  content: string;
-  authorName: string;
-  date: Date | string;
-  attachments: Array<{
-    name: string;
-    type: string;
-    url: string;
-    size?: number;
-  }>;
-}
-
 export function AnnouncementList({ classId }: AnnouncementListProps) {
   const { user } = useUser();
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcements, setAnnouncements] = useState<ClassPost[]>([]);
   const [newAnnouncement, setNewAnnouncement] = useState("");
   const [isPosting, setIsPosting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [editAttachments, setEditAttachments] = useState<ClassPostAttachment[]>([]);
+  const [editNewFiles, setEditNewFiles] = useState<File[]>([]);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFileInfo, setShowFileInfo] = useState(false);
@@ -70,15 +67,131 @@ export function AnnouncementList({ classId }: AnnouncementListProps) {
 
   const fetchAnnouncements = async () => {
     try {
-      const response = await fetch(`/api/faculty/classes/${classId}/announcements`);
-      if (response.ok) {
-        const data = await response.json();
-        setAnnouncements(data.announcements || []);
+      const result = await getClassPostsAction(classId);
+      if (result.success && result.data) {
+        setAnnouncements(result.data.data || []);
+      } else {
+        console.error("Failed to fetch announcements:", result.error);
       }
     } catch (error) {
       console.error("Error fetching announcements:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (postId: string) => {
+      try {
+          const result = await deleteClassPostAction(postId, classId);
+          if (result.success) {
+              toast.success("Post deleted successfully");
+              fetchAnnouncements();
+          } else {
+              toast.error("Failed to delete post");
+          }
+      } catch (error) {
+          toast.error("An error occurred");
+      }
+  }
+
+  const handleEditClick = (post: ClassPost) => {
+    setEditingPostId(post.id.toString());
+    setEditContent(post.content || "");
+    setEditAttachments(post.attachments || []);
+    setEditNewFiles([]);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPostId(null);
+    setEditContent("");
+    setEditAttachments([]);
+    setEditNewFiles([]);
+  };
+
+  const handleRemoveEditAttachment = (index: number) => {
+    setEditAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleEditFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      const validFiles = files.filter(file => {
+        const validation = validateFile(file);
+        if (!validation.valid) {
+          toast.error(validation.error);
+          return false;
+        }
+        return true;
+      });
+
+      if (validFiles.length > 0) {
+        setEditNewFiles((prev) => [...prev, ...validFiles]);
+      }
+    }
+  };
+
+  const handleRemoveEditNewFile = (index: number) => {
+    setEditNewFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdatePost = async (postId: string) => {
+    if (!editContent.trim() && editAttachments.length === 0 && editNewFiles.length === 0) return;
+
+    setIsUpdating(true);
+    try {
+      // 1. Upload new files to R2
+      const newAttachments: any[] = [];
+      
+      if (editNewFiles.length > 0) {
+        for (const file of editNewFiles) {
+          const formData = new FormData();
+          formData.append("file", file);
+          
+          const uploadResult = await uploadFileToR2(formData);
+          
+          if (uploadResult.success) {
+            newAttachments.push({
+              name: uploadResult.name,
+              url: uploadResult.url,
+              type: uploadResult.type,
+              size: uploadResult.size
+            });
+          } else {
+            console.error("Failed to upload file:", file.name, uploadResult.error);
+            toast.error(`Failed to upload ${file.name}: ${uploadResult.error}`);
+            setIsUpdating(false);
+            return;
+          }
+        }
+      }
+
+      // 2. Combine existing (kept) attachments and new attachments
+      // We need to send the full list of attachments that should exist on the post
+      const finalAttachments = [...editAttachments, ...newAttachments];
+
+      const result = await updateClassPostAction(
+        postId, 
+        classId, 
+        editContent,
+        finalAttachments
+      );
+      
+      if (result.success) {
+        toast.success("Post updated successfully");
+        setEditingPostId(null);
+        setEditContent("");
+        setEditAttachments([]);
+        setEditNewFiles([]);
+        fetchAnnouncements();
+      } else {
+        toast.error("Failed to update post");
+        console.error(result.error);
+      }
+    } catch (error) {
+      console.error("Error updating post:", error);
+      toast.error("An error occurred while updating");
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -226,28 +339,49 @@ export function AnnouncementList({ classId }: AnnouncementListProps) {
     setIsPosting(true);
     setError(null);
     try {
-      const formData = new FormData();
-      formData.append("content", newAnnouncement);
+      // 1. Upload files to R2 first
+      const attachments: any[] = [];
+      
+      if (selectedFiles.length > 0) {
+        for (const file of selectedFiles) {
+          const formData = new FormData();
+          formData.append("file", file);
+          
+          const uploadResult = await uploadFileToR2(formData);
+          
+          if (uploadResult.success) {
+            attachments.push({
+              name: uploadResult.name,
+              url: uploadResult.url,
+              type: uploadResult.type,
+              size: uploadResult.size
+            });
+          } else {
+            console.error("Failed to upload file:", file.name, uploadResult.error);
+            setError(`Failed to upload ${file.name}`);
+            setIsPosting(false);
+            return;
+          }
+        }
+      }
 
-      selectedFiles.forEach((file) => {
-        formData.append("files", file);
-      });
+      // 2. Create post with attachments
+      const result = await createClassPostAction(
+        classId,
+        newAnnouncement,
+        attachments
+      );
 
-      const response = await fetch(`/api/faculty/classes/${classId}/announcements`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (response.ok) {
+      if (result.success) {
         setNewAnnouncement("");
         setSelectedFiles([]);
         setFilePreviews(new Map());
         setError(null);
         fetchAnnouncements();
+        toast.success("Posted successfully");
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || "Failed to post announcement");
-        console.error("Failed to post announcement:", errorData);
+        setError(result.error || "Failed to post announcement");
+        console.error("Failed to post announcement:", result.error);
       }
     } catch (error) {
       setError("An error occurred while posting the announcement");
@@ -257,9 +391,10 @@ export function AnnouncementList({ classId }: AnnouncementListProps) {
     }
   };
 
-  const getTimeAgo = (date: string | Date) => {
+  const getTimeAgo = (dateString: string) => {
+    if (!dateString) return "";
     const now = new Date();
-    const past = new Date(date);
+    const past = new Date(dateString);
     const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
 
     if (diffInSeconds < 60) return "Just now";
@@ -283,45 +418,47 @@ export function AnnouncementList({ classId }: AnnouncementListProps) {
   };
 
   const getFileIcon = (fileType: string, fileName: string) => {
+    const type = fileType || "";
+    const name = fileName || "";
     // Images
-    if (fileType.startsWith('image/')) {
+    if (type.startsWith('image/')) {
       return <ImageIcon className="h-5 w-5 text-blue-500" />;
     }
     // PDFs
-    if (fileType === 'application/pdf') {
+    if (type === 'application/pdf') {
       return <FileText className="h-5 w-5 text-red-500" />;
     }
     // Word documents
-    if (fileType.includes('word') || fileType.includes('document')) {
+    if (type.includes('word') || type.includes('document')) {
       return <FileText className="h-5 w-5 text-blue-600" />;
     }
     // Excel spreadsheets
-    if (fileType.includes('excel') || fileType.includes('spreadsheet')) {
+    if (type.includes('excel') || type.includes('spreadsheet')) {
       return <FileSpreadsheet className="h-5 w-5 text-green-600" />;
     }
     // PowerPoint
-    if (fileType.includes('powerpoint') || fileType.includes('presentation')) {
+    if (type.includes('powerpoint') || type.includes('presentation')) {
       return <FileText className="h-5 w-5 text-orange-600" />;
     }
     // Videos
-    if (fileType.startsWith('video/')) {
+    if (type.startsWith('video/')) {
       return <FileVideo className="h-5 w-5 text-purple-500" />;
     }
     // Audio
-    if (fileType.startsWith('audio/')) {
+    if (type.startsWith('audio/')) {
       return <FileAudio className="h-5 w-5 text-pink-500" />;
     }
     // Archives
-    if (fileType.includes('zip') || fileType.includes('rar') || fileType.includes('compressed')) {
+    if (type.includes('zip') || type.includes('rar') || type.includes('compressed')) {
       return <FileArchive className="h-5 w-5 text-yellow-600" />;
     }
     // Text files
-    if (fileType === 'text/plain') {
+    if (type === 'text/plain') {
       return <FileText className="h-5 w-5 text-gray-500" />;
     }
     // Code files
-    if (fileName.endsWith('.js') || fileName.endsWith('.ts') || fileName.endsWith('.py') ||
-        fileName.endsWith('.java') || fileName.endsWith('.cpp') || fileName.endsWith('.c')) {
+    if (name.endsWith('.js') || name.endsWith('.ts') || name.endsWith('.py') ||
+        name.endsWith('.java') || name.endsWith('.cpp') || name.endsWith('.c')) {
       return <FileCode className="h-5 w-5 text-indigo-500" />;
     }
     // Default
@@ -548,114 +685,241 @@ export function AnnouncementList({ classId }: AnnouncementListProps) {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
               <Bell className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-semibold mb-2">No announcements yet</h3>
-            <p className="text-sm text-muted-foreground">
-              Post your first announcement to notify students
+            <h3 className="text-lg font-medium">No posts yet</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Be the first to announce something to your class.
             </p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
           {announcements.map((announcement) => (
-            <Card
-              key={announcement.id}
-              className="shadow-sm hover:shadow-md transition-shadow"
-            >
-              <CardContent className="p-4">
-                <div className="flex gap-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {announcement.authorName
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-semibold text-sm">
-                          {announcement.authorName}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {getTimeAgo(announcement.date)}
-                        </p>
+            <Card key={announcement.id} className="overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+              <CardContent className="p-0">
+                {/* Header */}
+                <div className="flex items-start justify-between p-4 border-b bg-muted/5">
+                  <div className="flex gap-3">
+                    <Avatar className="h-10 w-10 border">
+                      <AvatarImage src={announcement.author?.avatar_url} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                        {announcement.author?.name?.substring(0, 2) || "T"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold">{announcement.author?.name || "Teacher"}</p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                          {announcement.type_name || "Announcement"}
+                        </span>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {getTimeAgo(announcement.created_at)}
+                      </p>
                     </div>
+                  </div>
 
-                    <p className="text-sm whitespace-pre-wrap mb-3">
-                      {announcement.content}
-                    </p>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleEditClick(announcement)}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => handleDelete(announcement.id.toString())}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
 
-                    {announcement.attachments.length > 0 && (
-                      <div className="space-y-2 mb-3">
-                        {announcement.attachments.map((attachment, idx) => {
-                          const isImage = attachment.type?.startsWith('image/');
+                {/* Content */}
+                <div className="p-4">
+                  {editingPostId === announcement.id.toString() ? (
+                    <div className="space-y-3">
+                      <Textarea
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        className="min-h-[100px] resize-none"
+                        placeholder="Edit your announcement..."
+                        autoFocus
+                      />
 
-                          return (
-                            <a
-                              key={idx}
-                              href={attachment.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="group flex items-center gap-3 p-3 border rounded-lg hover:bg-accent/50 hover:border-primary/50 transition-all cursor-pointer"
-                            >
-                              {isImage ? (
-                                <div className="relative w-16 h-16 rounded overflow-hidden flex-shrink-0 border">
-                                  <img
-                                    src={attachment.url}
-                                    alt={attachment.name}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      // Fallback to icon if image fails to load
-                                      e.currentTarget.style.display = 'none';
-                                      e.currentTarget.parentElement!.innerHTML = '<div class="flex items-center justify-center w-full h-full bg-muted">' +
-                                        getFileIcon(attachment.type, attachment.name) +
-                                        '</div>';
-                                    }}
-                                  />
+                      {/* Existing Attachments */}
+                      {editAttachments.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">Attachments</p>
+                          <div className="flex flex-wrap gap-2">
+                            {editAttachments.map((attachment, idx) => (
+                              <div
+                                key={`existing-${idx}`}
+                                className="group relative flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-muted/30 max-w-[200px]"
+                              >
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background">
+                                  {getFileIcon(attachment.type, attachment.name)}
                                 </div>
-                              ) : (
-                                getFileIcon(attachment.type, attachment.name)
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
-                                  {attachment.name}
-                                </p>
-                                {attachment.size && (
-                                  <p className="text-xs text-muted-foreground">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium truncate text-foreground/90">
+                                    {attachment.name}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
                                     {formatFileSize(attachment.size)}
                                   </p>
-                                )}
+                                </div>
+                                <button
+                                  className="h-5 w-5 flex items-center justify-center rounded-full hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
+                                  onClick={() => handleRemoveEditAttachment(idx)}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
                               </div>
-                              <Download className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                            </a>
-                          );
-                        })}
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* New Files */}
+                      {editNewFiles.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">New Files</p>
+                          <div className="flex flex-wrap gap-2">
+                            {editNewFiles.map((file, idx) => (
+                              <div
+                                key={`new-${idx}`}
+                                className="group relative flex items-center gap-2 p-1.5 pr-2 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 max-w-[200px]"
+                              >
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background">
+                                  {getFileIcon(file.type, file.name)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium truncate text-foreground/90">
+                                    {file.name}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {formatFileSize(file.size)}
+                                  </p>
+                                </div>
+                                <button
+                                  className="h-5 w-5 flex items-center justify-center rounded-full hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors"
+                                  onClick={() => handleRemoveEditNewFile(idx)}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            ref={editFileInputRef}
+                            type="file"
+                            multiple
+                            className="hidden"
+                            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.mp4,.mov,.mp3,.wav"
+                            onChange={handleEditFileSelect}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => editFileInputRef.current?.click()}
+                            className="h-8 gap-2 text-xs"
+                          >
+                            <Paperclip className="h-3 w-3" />
+                            Attach Files
+                          </Button>
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleCancelEdit}
+                            disabled={isUpdating}
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            onClick={() => handleUpdatePost(announcement.id.toString())}
+                            disabled={(!editContent.trim() && editAttachments.length === 0 && editNewFiles.length === 0) || isUpdating}
+                          >
+                            {isUpdating ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              "Save Changes"
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="prose prose-sm max-w-none text-foreground">
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                        {announcement.content}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Attachments */}
+                  {announcement.attachments && announcement.attachments.length > 0 && (
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {announcement.attachments.map((attachment, idx) => {
+                        if (!attachment) return null;
+                        const fileType = attachment.type || "";
+                        const isImage = fileType.startsWith('image/');
+
+                        return (
+                          <a
+                            key={idx}
+                            href={attachment.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                          >
+                            {isImage ? (
+                              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border bg-background">
+                                <img
+                                  src={attachment.url}
+                                  alt={attachment.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-background/50">
+                                {getFileIcon(fileType, attachment.name)}
+                              </div>
+                            )}
+                            
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
+                                {attachment.name}
+                              </p>
+                              {attachment.size && (
+                                <p className="text-xs text-muted-foreground">
+                                  {formatFileSize(attachment.size)}
+                                </p>
+                              )}
+                            </div>
+                            
+                            <Download className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

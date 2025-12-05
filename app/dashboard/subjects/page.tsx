@@ -74,15 +74,6 @@ export default function MyClassesPage() {
 
   useEffect(() => {
     async function fetchClasses() {
-      console.log(
-        "🔍 My Classes Page - Starting fetch with studentId:",
-        studentId,
-        "semester:",
-        semester,
-        "schoolYear:",
-        schoolYear,
-      );
-
       if (!studentId) {
         console.warn("⚠️ No student ID available");
         setIsLoading(false);
@@ -93,10 +84,8 @@ export default function MyClassesPage() {
       try {
         // Fetch classes for current semester and school year
         const url = `/api/student/subjects?studentId=${studentId}&semester=${semester}&schoolYear=${schoolYear}`;
-        console.log("📡 Fetching from:", url);
 
         const response = await fetch(url);
-        console.log("📡 Response status:", response.status);
 
         const data = await response.json();
         console.log("📦 Response data:", data);
