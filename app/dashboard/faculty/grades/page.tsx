@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { laravelApi, type LaravelGrade } from "@/lib/laravel-api";
+import { api } from "@/lib/api-client";
 import { useUser } from "@clerk/nextjs";
 import { Download, Edit, FileText, Search, TrendingUp } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -64,14 +65,26 @@ export default function FacultyGradesPage() {
             const classData: GradeData[] = [];
 
             for (const laravelClass of facultyData.data.classes) {
-                const grades = await laravelApi.getClassGrades(laravelClass.id);
+                const { data, error } = await api.faculty.classes({ classId: String(laravelClass.id) }).grades.get();
+                const mapped = error ? [] : (data?.grades || []).map((g: any) => ({
+                    id: g.enrollmentId,
+                    student_id: g.studentId,
+                    class_id: laravelClass.id,
+                    prelim_grade: g.prelimGrade,
+                    midterm_grade: g.midtermGrade,
+                    finals_grade: g.finalsGrade,
+                    total_average: g.totalAverage,
+                    remarks: g.remarks,
+                    first_name: g.studentName,
+                    last_name: "",
+                } as LaravelGrade));
 
                 classData.push({
                     id: laravelClass.id,
                     subjectCode: laravelClass.subject_code,
                     subjectName: laravelClass.subject_title,
                     section: laravelClass.section,
-                    students: grades,
+                    students: mapped,
                 });
             }
 

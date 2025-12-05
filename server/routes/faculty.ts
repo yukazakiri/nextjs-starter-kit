@@ -177,41 +177,41 @@ export const faculty = new Elysia({ prefix: "/faculty" })
       try {
         await requireAuth();
 
-        const classId = parseInt(params.classId);
+        const classId = params.classId;
 
-        // Import Laravel API
         const { laravelApi } = await import("@/lib/laravel-api");
 
-        // Fetch grades from Laravel API
-        const grades = await laravelApi.getClassGrades(classId);
+        let enrollments: any;
+        try {
+          enrollments = await laravelApi.getClassEnrollmentsByClassId(classId);
+        } catch (e) {
+          const base = (process.env.DCCP_API_URL || "https://admin.dccp.edu.ph").replace(/\/$/, "");
+          const url = `${base}/api/class-enrollments/class/${classId}`;
+          const token = (process.env.DCCP_API_TOKEN || "").replace(/^\s*["']|["']\s*$/g, "");
+          const res = await fetch(url, {
+            headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) {
+            const txt = await res.text();
+            return serverError("Failed to fetch grades", `Laravel ${res.status}: ${res.statusText} ${txt}`);
+          }
+          enrollments = await res.json();
+        }
 
-        // Combine data
-        const gradesData = grades.map((enrollment: any) => {
-          return {
-            enrollmentId: enrollment.id?.toString() || "",
-            studentId: enrollment.student_id?.toString() || "",
-            studentName: enrollment.first_name && enrollment.last_name
-              ? `${enrollment.last_name}, ${enrollment.first_name}`
-              : "Unknown",
-            prelimGrade: enrollment.prelim_grade
-              ? parseFloat(enrollment.prelim_grade.toString())
-              : null,
-            midtermGrade: enrollment.midterm_grade
-              ? parseFloat(enrollment.midterm_grade.toString())
-              : null,
-            finalsGrade: enrollment.finals_grade
-              ? parseFloat(enrollment.finals_grade.toString())
-              : null,
-            totalAverage: enrollment.total_average
-              ? parseFloat(enrollment.total_average.toString())
-              : null,
-            isPrelimSubmitted: false, // TODO: Add to Laravel API
-            isMidtermSubmitted: false, // TODO: Add to Laravel API
-            isFinalsSubmitted: false, // TODO: Add to Laravel API
-            isGradesFinalized: false, // TODO: Add to Laravel API
-            remarks: enrollment.remarks || "",
-          };
-        });
+        const gradesData = (enrollments?.data || []).map((item: any) => ({
+          enrollmentId: String(item.id),
+          studentId: item.student?.student_id || String(item.student_id),
+          studentName: item.student?.full_name || "",
+          prelimGrade: item.prelim_grade ?? null,
+          midtermGrade: item.midterm_grade ?? null,
+          finalsGrade: item.finals_grade ?? null,
+          totalAverage: item.total_average ?? null,
+          isPrelimSubmitted: !!item.prelim_grade,
+          isMidtermSubmitted: !!item.midterm_grade,
+          isFinalsSubmitted: !!item.finals_grade,
+          isGradesFinalized: !!item.is_grades_finalized,
+          remarks: item.remarks ?? "",
+        }));
 
         return { grades: gradesData };
       } catch (error) {
@@ -231,23 +231,42 @@ export const faculty = new Elysia({ prefix: "/faculty" })
       try {
         await requireAuth();
 
-        const { enrollmentId, term, grade } = body;
+        const { enrollmentId, term, grade, totalAverage, remarks } = body as { enrollmentId: string; term?: string; grade?: number | null; totalAverage?: number; remarks?: string };
         
-        if (!enrollmentId || !term || grade === undefined) {
-          return badRequest("Missing required fields");
-        }
+        if (!enrollmentId) return badRequest("Missing enrollmentId");
+        if (term && grade === undefined) return badRequest("Missing grade for term");
+        if (!term && totalAverage === undefined && remarks === undefined) return badRequest("No fields to update");
 
-        // Import Laravel API
         const { laravelApi } = await import("@/lib/laravel-api");
-        
-        // Prepare update data
-        const updateData: any = {};
-        if (term === 'prelim') updateData.prelim_grade = grade;
-        else if (term === 'midterm') updateData.midterm_grade = grade;
-        else if (term === 'finals') updateData.finals_grade = grade;
+        const payload: Record<string, any> = {};
+        if (term) {
+          const field = term === 'prelim' ? 'prelim_grade' : term === 'midterm' ? 'midterm_grade' : term === 'finals' ? 'finals_grade' : undefined;
+          if (!field) return badRequest("Invalid term");
+          payload[field] = grade ?? null;
+        }
+        if (typeof totalAverage === 'number') payload.total_average = totalAverage;
+        if (typeof remarks === 'string') payload.remarks = remarks;
 
-        // Update grade via Laravel API
-        await laravelApi.updateGrade(enrollmentId, updateData);
+        try {
+          await laravelApi.updateClassEnrollment(enrollmentId, payload);
+        } catch (e) {
+          const base = (process.env.DCCP_API_URL || "https://admin.dccp.edu.ph").replace(/\/$/, "");
+          const url = `${base}/api/class-enrollments/${enrollmentId}`;
+          const token = (process.env.DCCP_API_TOKEN || "").replace(/^\s*["']|["']\s*$/g, "");
+          const res = await fetch(url, {
+            method: "PUT",
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) {
+            const txt = await res.text();
+            return serverError("Failed to update grade", `Laravel ${res.status}: ${res.statusText} ${txt}`);
+          }
+        }
 
         return { success: true };
 
@@ -262,8 +281,10 @@ export const faculty = new Elysia({ prefix: "/faculty" })
       }),
       body: t.Object({
         enrollmentId: t.String(),
-        term: t.String(),
-        grade: t.Number(),
+        term: t.Optional(t.String()),
+        grade: t.Nullable(t.Number()),
+        totalAverage: t.Optional(t.Number()),
+        remarks: t.Optional(t.String()),
       }),
     }
   );

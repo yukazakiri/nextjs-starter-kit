@@ -1,6 +1,6 @@
 // Laravel API client for Sanctum authentication
 const LARAVEL_API_BASE_URL = process.env.DCCP_API_URL || "https://admin.dccp.edu.ph";
-const LARAVEL_API_TOKEN = process.env.DCCP_API_TOKEN || "26|LAwmlRhI27abHoZKwOUwXDbLZssqY2uoHlk7smInb7c0a62b";
+const LARAVEL_API_TOKEN = process.env.DCCP_API_TOKEN || "";
 
 interface NextFetchRequestConfig {
     revalidate?: number | false;
@@ -316,7 +316,7 @@ class LaravelApiClient {
 
     constructor(baseURL: string = LARAVEL_API_BASE_URL, token: string = LARAVEL_API_TOKEN) {
         this.baseURL = baseURL;
-        this.token = token;
+        this.token = typeof token === "string" ? token.replace(/^\s*["']|["']\s*$/g, "") : token;
     }
 
     private getFromCache<T>(key: string): T | null {
@@ -418,6 +418,62 @@ class LaravelApiClient {
         return this.request<void>(`/api/grades/${gradeId}`, {
             method: "PUT",
             body: JSON.stringify(gradeData),
+        });
+    }
+
+    async getClassEnrollmentsByClassId(classId: string | number): Promise<{
+        data: Array<{
+            id: number;
+            class_id: number;
+            student_id: number;
+            completion_date: string | null;
+            status: string | boolean;
+            remarks: string | null;
+            prelim_grade: number | null;
+            midterm_grade: number | null;
+            finals_grade: number | null;
+            total_average: number | null;
+            is_grades_finalized: boolean;
+            is_grades_verified: boolean;
+            verified_by: number | null;
+            verified_at: string | null;
+            verification_notes: string | null;
+            letter_grade: string | null;
+            grade_point: number | null;
+            is_passing: boolean | null;
+            has_all_grades: string | null;
+            class: {
+                id: string;
+                section: string;
+                subject_code: string;
+                subject_title: string;
+                faculty: string;
+            };
+            student: {
+                id: string;
+                student_id: string;
+                full_name: string;
+                first_name: string;
+                last_name: string;
+                email: string;
+            };
+            created_at: string;
+            updated_at: string;
+            created_at_formatted?: string;
+            updated_at_formatted?: string;
+            completion_date_formatted?: string;
+            verified_at_formatted?: string;
+        }>;
+        links?: any;
+        meta?: any;
+    }> {
+        return this.request(`/api/class-enrollments/class/${classId}`);
+    }
+
+    async updateClassEnrollment(enrollmentId: string | number, payload: Record<string, any>): Promise<any> {
+        return this.request(`/api/class-enrollments/${enrollmentId}`, {
+            method: "PUT",
+            body: JSON.stringify(payload),
         });
     }
 

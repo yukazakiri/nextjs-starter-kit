@@ -12,10 +12,12 @@ import { schedule } from "./routes/schedule";
 import { students } from "./routes/students";
 import { uploadImage } from "./routes/upload-image";
 import { user } from "./routes/user";
+import { classGrades } from "./routes/class-grades";
 
 export const app = new Elysia({ prefix: "/api" })
     .use(auth)
     .use(students)
+    .use(classGrades)
     .use(faculty)
     .use(schedule)
     .use(academicPeriods)
