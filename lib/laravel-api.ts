@@ -361,6 +361,31 @@ class LaravelApiClient {
                 const errorText = await response.text();
                 console.error(`[LARAVEL API] Error ${response.status}: ${response.statusText}`, errorText);
 
+                // Try to parse the error response as JSON for better error messages
+                let errorData: any = null;
+                try {
+                    errorData = JSON.parse(errorText);
+                } catch {
+                    // Not JSON, use raw text
+                }
+
+                // Special handling for validation errors (422)
+                if (response.status === 422 && errorData) {
+                    const validationErrors = errorData.errors || {};
+                    const errorMessages = Object.entries(validationErrors)
+                        .map(([field, messages]) => {
+                            const fieldMessages = Array.isArray(messages) ? messages : [messages];
+                            return `${field}: ${fieldMessages.join(', ')}`;
+                        })
+                        .join('\n');
+
+                    const error = new Error(errorData.message || 'Validation failed');
+                    (error as any).status = 422;
+                    (error as any).validationErrors = validationErrors;
+                    (error as any).details = errorMessages;
+                    throw error;
+                }
+
                 // Special handling for faculty not found (404)
                 if (response.status === 404 && endpoint.includes("/api/faculties/")) {
                     const facultyId = endpoint.split("/").pop();
@@ -368,7 +393,11 @@ class LaravelApiClient {
                     throw new Error(`Faculty not found: ${facultyId}`);
                 }
 
-                throw new Error(`Laravel API error: ${response.status} ${response.statusText}`);
+                // General error with message from API if available
+                const errorMessage = errorData?.message || `Laravel API error: ${response.status} ${response.statusText}`;
+                const error = new Error(errorMessage);
+                (error as any).status = response.status;
+                throw error;
             }
 
             const data = await response.json();
@@ -584,14 +613,15 @@ class LaravelApiClient {
             subject_id: classData.subject_information?.subject?.id?.toString() || "",
             subject_ids: classData.subject_information?.subject?.id?.toString() || "",
             settings: {
-                background_color: settings.background_color,
-                accent_color: settings.accent_color,
-                banner_image: settings.banner_image,
-                enable_announcements: settings.enable_announcements,
-                enable_grade_visibility: settings.enable_grade_visibility,
-                enable_attendance_tracking: settings.enable_attendance_tracking,
-                allow_late_submissions: settings.allow_late_submissions,
-                enable_discussion_board: settings.enable_discussion_board,
+                theme: settings.theme || "default",
+                background_color: settings.background_color || "",
+                accent_color: settings.accent_color || "",
+                banner_image: settings.banner_image || "",
+                enable_announcements: settings.enable_announcements ?? true,
+                enable_grade_visibility: settings.enable_grade_visibility ?? true,
+                enable_attendance_tracking: settings.enable_attendance_tracking ?? true,
+                allow_late_submissions: settings.allow_late_submissions ?? false,
+                enable_discussion_board: settings.enable_discussion_board ?? false,
                 custom: [],
             },
         };
@@ -609,9 +639,9 @@ class LaravelApiClient {
     async createClassPost(postData: FormData): Promise<any> {
         // We need to handle FormData manually because our request wrapper sets Content-Type to application/json by default
         // and we need to let the browser/fetch set the boundary for multipart/form-data
-        
+
         const url = `${this.baseURL}/api/class-posts`;
-        
+
         const headers: HeadersInit = {
             Accept: "application/json",
             Authorization: `Bearer ${this.token}`,
@@ -625,9 +655,9 @@ class LaravelApiClient {
         });
 
         if (!response.ok) {
-             const errorText = await response.text();
-             console.error(`[LARAVEL API] Error ${response.status}: ${response.statusText}`, errorText);
-             throw new Error(`Laravel API error: ${response.status} ${response.statusText}`);
+            const errorText = await response.text();
+            console.error(`[LARAVEL API] Error ${response.status}: ${response.statusText}`, errorText);
+            throw new Error(`Laravel API error: ${response.status} ${response.statusText}`);
         }
 
         return await response.json();
@@ -645,10 +675,10 @@ class LaravelApiClient {
             body: JSON.stringify(data),
         });
     }
-    
+
     async addClassPostAttachment(postId: string | number, attachmentData: FormData): Promise<any> {
         const url = `${this.baseURL}/api/class-posts/${postId}/attachments`;
-        
+
         const headers: HeadersInit = {
             Accept: "application/json",
             Authorization: `Bearer ${this.token}`,
@@ -661,9 +691,9 @@ class LaravelApiClient {
         });
 
         if (!response.ok) {
-             const errorText = await response.text();
-             console.error(`[LARAVEL API] Error ${response.status}: ${response.statusText}`, errorText);
-             throw new Error(`Laravel API error: ${response.status} ${response.statusText}`);
+            const errorText = await response.text();
+            console.error(`[LARAVEL API] Error ${response.status}: ${response.statusText}`, errorText);
+            throw new Error(`Laravel API error: ${response.status} ${response.statusText}`);
         }
 
         return await response.json();

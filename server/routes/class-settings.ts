@@ -1,6 +1,12 @@
 import { laravelApi } from "@/lib/laravel-api";
 import { Elysia, t } from "elysia";
 
+// Type for Laravel validation errors
+interface LaravelValidationError {
+    message: string;
+    errors?: Record<string, string[]>;
+}
+
 export const classSettings = new Elysia({ prefix: "/classes" }).patch(
     "/:id",
     async ({ params, request }) => {
@@ -8,7 +14,14 @@ export const classSettings = new Elysia({ prefix: "/classes" }).patch(
             const { id } = params;
 
             if (!id) {
-                return Response.json({ error: "Class ID is required" }, { status: 400 });
+                return Response.json(
+                    {
+                        success: false,
+                        error: "Class ID is required",
+                        message: "Please provide a valid class ID"
+                    },
+                    { status: 400 }
+                );
             }
 
             console.log(`[CLASS SETTINGS] Updating settings for class ${id}`);
@@ -17,7 +30,14 @@ export const classSettings = new Elysia({ prefix: "/classes" }).patch(
             const { settings } = body;
 
             if (!settings) {
-                return Response.json({ error: "Settings are required" }, { status: 400 });
+                return Response.json(
+                    {
+                        success: false,
+                        error: "Settings are required",
+                        message: "Please provide settings to update"
+                    },
+                    { status: 400 }
+                );
             }
 
             console.log("[CLASS SETTINGS] Settings received:", settings);
@@ -32,19 +52,58 @@ export const classSettings = new Elysia({ prefix: "/classes" }).patch(
                 message: "Class settings updated successfully",
                 data: response,
             });
-        } catch (error) {
+        } catch (error: any) {
             console.error("[CLASS SETTINGS] Error updating class settings:", error);
 
-            const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            const status = errorMessage.includes("not found") ? 404 : 500;
+            // Handle validation errors (422)
+            if (error.status === 422 || error.validationErrors) {
+                const validationErrors = error.validationErrors || {};
+                const errorDetails = error.details || "";
 
+                return Response.json(
+                    {
+                        success: false,
+                        error: "Validation Error",
+                        message: error.message || "The given data was invalid.",
+                        validationErrors,
+                        details: errorDetails,
+                    },
+                    { status: 422 }
+                );
+            }
+
+            // Handle not found errors
+            if (error.status === 404 || (error.message && error.message.includes("not found"))) {
+                return Response.json(
+                    {
+                        success: false,
+                        error: "Not Found",
+                        message: error.message || "Class not found",
+                    },
+                    { status: 404 }
+                );
+            }
+
+            // Handle authentication errors
+            if (error.status === 401) {
+                return Response.json(
+                    {
+                        success: false,
+                        error: "Authentication Error",
+                        message: "Unable to authenticate with the server. Please try again.",
+                    },
+                    { status: 401 }
+                );
+            }
+
+            // General server error
             return Response.json(
                 {
                     success: false,
-                    error: "Failed to update class settings",
-                    message: errorMessage,
+                    error: "Server Error",
+                    message: error.message || "Failed to update class settings. Please try again.",
                 },
-                { status }
+                { status: 500 }
             );
         }
     },

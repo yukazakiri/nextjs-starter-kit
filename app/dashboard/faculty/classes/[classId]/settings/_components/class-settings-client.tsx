@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ClassData, laravelApi } from "@/lib/laravel-api";
+import { ClassData } from "@/lib/laravel-api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Loader2, Palette, Save, Settings, Sliders } from "lucide-react";
 import Link from "next/link";
@@ -27,9 +27,6 @@ const toBoolean = (val: string | boolean | undefined): boolean => {
     if (val === '1' || val === 'true') return true;
     return false;
 };
-
-// Helper to convert boolean back to "1"/"0" for API
-const toStringBool = (val: boolean): string => (val ? "1" : "0");
 
 const settingsSchema = z.object({
     // Visuals
@@ -75,25 +72,76 @@ export function ClassSettingsClient({ classData }: ClassSettingsClientProps) {
     async function onSubmit(data: SettingsFormValues) {
         setIsSaving(true);
         try {
-            // Transform booleans back to API expected format if needed, 
-            // though the interface says string, we'll verify if API accepts boolean or needs string.
-            // Based on previous plan, converting to string "1"/"0".
-            const apiPayload = {
-                ...data,
-                enable_announcements: toStringBool(data.enable_announcements),
-                enable_grade_visibility: toStringBool(data.enable_grade_visibility),
-                enable_attendance_tracking: toStringBool(data.enable_attendance_tracking),
-                allow_late_submissions: toStringBool(data.allow_late_submissions),
-                enable_discussion_board: toStringBool(data.enable_discussion_board),
+            // Build settings payload matching expected API structure
+            const settingsPayload = {
+                theme: data.theme,
+                accent_color: data.accent_color,
+                background_color: data.background_color,
+                banner_image: data.banner_image,
+                enable_announcements: data.enable_announcements,
+                enable_grade_visibility: data.enable_grade_visibility,
+                enable_attendance_tracking: data.enable_attendance_tracking,
+                allow_late_submissions: data.allow_late_submissions,
+                enable_discussion_board: data.enable_discussion_board,
             };
 
-            await laravelApi.updateClassSettings(classData.id, apiPayload);
+            // Call our server API route which handles authentication
+            const response = await fetch(`/api/classes/${classData.id}`, {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ settings: settingsPayload }),
+            });
 
-            toast.success("Settings updated successfully");
+            const result = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                // Handle different error types with specific notifications
+                if (response.status === 422 && result.validationErrors) {
+                    // Validation errors - show detailed feedback
+                    const errorList = Object.entries(result.validationErrors as Record<string, string[]>)
+                        .slice(0, 3) // Show first 3 errors
+                        .map(([field, messages]) => `• ${field}: ${(messages as string[])[0]}`)
+                        .join('\n');
+
+                    toast.error("Validation Error", {
+                        description: errorList || result.message || "Please check your input and try again.",
+                        duration: 6000,
+                    });
+                } else if (response.status === 401) {
+                    toast.error("Authentication Error", {
+                        description: "Your session may have expired. Please refresh the page and try again.",
+                        duration: 5000,
+                    });
+                } else if (response.status === 404) {
+                    toast.error("Class Not Found", {
+                        description: "The class you're trying to update could not be found.",
+                        duration: 5000,
+                    });
+                } else {
+                    toast.error(result.error || "Update Failed", {
+                        description: result.message || "Failed to save settings. Please try again.",
+                        duration: 5000,
+                    });
+                }
+                return;
+            }
+
+            toast.success("Settings Updated", {
+                description: "Your class settings have been saved successfully.",
+                duration: 3000,
+            });
             router.refresh(); // Refresh server data
         } catch (error) {
             console.error("Failed to save settings:", error);
-            toast.error("Failed to save settings. Please try again.");
+            // Network or unexpected errors
+            toast.error("Connection Error", {
+                description: error instanceof Error
+                    ? error.message
+                    : "Unable to reach the server. Please check your connection and try again.",
+                duration: 5000,
+            });
         } finally {
             setIsSaving(false);
         }
